@@ -1,5 +1,4 @@
 import "isomorphic-unfetch";
-import _ from "lodash";
 import * as QueryString from "query-string";
 import {
   API_BASE_MAINNET,
