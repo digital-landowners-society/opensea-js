@@ -4,11 +4,11 @@ import {
   ConsiderationInputItem,
   CreateInputItem,
   OrderComponents,
+  Signer,
 } from "@opensea/seaport-js/lib/types";
 import { BigNumber } from "bignumber.js";
-import { providers } from "ethers";
+import { ethers, providers } from "ethers";
 import { EventEmitter } from "fbemitter";
-import Web3 from "web3";
 import { WyvernProtocol } from "wyvern-js";
 import { OpenSeaAPI } from "./api";
 import {
@@ -21,7 +21,6 @@ import {
   CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
   OPENSEA_FEE_RECIPIENT,
   DEFAULT_ZONE_BY_NETWORK,
-  RPC_URL_PATH,
   UNISWAP_FACTORY_ADDRESS_MAINNET,
   UNISWAP_FACTORY_ADDRESS_RINKEBY,
   WETH_ADDRESS_BY_NETWORK,
@@ -59,11 +58,8 @@ import {
 } from "./utils/utils";
 
 export class OpenSeaSDK {
-  // Web3 instance to use
-  public web3: Web3;
-  public web3ReadOnly: Web3;
   // Ethers provider
-  public ethersProvider: providers.Web3Provider;
+  public ethersProvider: providers.Provider;
   // Seaport client
   public seaport: Seaport;
   // Logger function to use when debugging
@@ -80,14 +76,14 @@ export class OpenSeaSDK {
   /**
    * Your very own seaport.
    * Create a new instance of OpenSeaJS.
-   * @param provider Web3 Provider to use for transactions. For example:
+   * @param signer Web3 Provider to use for transactions. For example:
    *  `const provider = new Web3.providers.HttpProvider('https://mainnet.infura.io')`
    * @param apiConfig configuration options, including `networkName`
    * @param logger logger, optional, a function that will be called with debugging
    *  information
    */
   constructor(
-    provider: Web3["currentProvider"],
+    signer: Signer,
     apiConfig: OpenSeaAPIConfig = {},
     logger?: (arg: string) => void
   ) {
@@ -97,23 +93,9 @@ export class OpenSeaSDK {
 
     this._networkName = apiConfig.networkName;
 
-    const readonlyProvider = new Web3.providers.HttpProvider(
-      `${this.api.apiBaseUrl}/${RPC_URL_PATH}`
-    );
-
-    const useReadOnlyProvider = apiConfig.useReadOnlyProvider ?? true;
-
-    // Web3 Config
-    this.web3 = new Web3(provider);
-    this.web3ReadOnly = useReadOnlyProvider
-      ? new Web3(readonlyProvider)
-      : this.web3;
-
     // Ethers Config
-    this.ethersProvider = new providers.Web3Provider(
-      provider as providers.ExternalProvider
-    );
-    this.seaport = new Seaport(this.ethersProvider, {
+    this.ethersProvider = signer.provider as ethers.providers.Provider;
+    this.seaport = new Seaport(signer, {
       conduitKeyToConduit: CONDUIT_KEYS_TO_CONDUIT,
       overrides: {
         defaultConduitKey: CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
@@ -645,31 +627,30 @@ export class OpenSeaSDK {
     // will fail if too many decimal places, so special-case ether
     const basePrice = isEther
       ? makeBigNumber(
-          this.web3.utils.toWei(startAmount.toString(), "ether")
+          ethers.utils.parseEther(startAmount.toString()).toString()
         ).integerValue()
       : WyvernProtocol.toBaseUnitAmount(startAmount, token.decimals);
 
     const endPrice = endAmount
       ? isEther
         ? makeBigNumber(
-            this.web3.utils.toWei(endAmount.toString(), "ether")
+            ethers.utils.parseEther(endAmount.toString()).toString()
           ).integerValue()
         : WyvernProtocol.toBaseUnitAmount(endAmount, token.decimals)
       : undefined;
 
     const extra = isEther
       ? makeBigNumber(
-          this.web3.utils.toWei(priceDiff.toString(), "ether")
+          ethers.utils.parseEther(priceDiff.toString()).toString()
         ).integerValue()
       : WyvernProtocol.toBaseUnitAmount(priceDiff, token.decimals);
 
     const reservePrice = englishAuctionReservePrice
       ? isEther
         ? makeBigNumber(
-            this.web3.utils.toWei(
-              englishAuctionReservePrice.toString(),
-              "ether"
-            )
+            ethers.utils
+              .parseEther(englishAuctionReservePrice.toString())
+              .toString()
           ).integerValue()
         : WyvernProtocol.toBaseUnitAmount(
             englishAuctionReservePrice,
@@ -724,7 +705,7 @@ export class OpenSeaSDK {
     // Normal wallet
     try {
       this._dispatch(EventType.TransactionCreated, transactionEventData);
-      await confirmTransaction(this.web3, transactionHash);
+      await confirmTransaction(this.ethersProvider, transactionHash);
       this.logger(`Transaction succeeded: ${description}`);
       this._dispatch(EventType.TransactionConfirmed, transactionEventData);
     } catch (error) {

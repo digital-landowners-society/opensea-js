@@ -1,40 +1,18 @@
 import { ItemType } from "@opensea/seaport-js/lib/constants";
 import BigNumber from "bignumber.js";
-import { AbiType, CallData, TxData } from "ethereum-types";
-import * as ethUtil from "ethereumjs-util";
-import * as _ from "lodash";
-import Web3 from "web3";
-import { JsonRpcResponse } from "web3-core-helpers/types";
-import { AbstractProvider } from "web3-core/types";
-import { Contract } from "web3-eth-contract";
+import { ethers } from "ethers";
 import { WyvernProtocol } from "wyvern-js";
 import {
-  AnnotatedFunctionABI,
-  FunctionInputKind,
-  FunctionOutputKind,
-  Network,
-  Schema,
-  StateMutability,
-} from "wyvern-schemas/dist/types";
-import {
-  ENJIN_ADDRESS,
-  ENJIN_COIN_ADDRESS,
   INVERSE_BASIS_POINT,
   MAX_EXPIRATION_MONTHS,
-  MERKLE_VALIDATOR_MAINNET,
-  MERKLE_VALIDATOR_RINKEBY,
   NULL_ADDRESS,
   NULL_BLOCK_HASH,
   SHARED_STOREFRONT_LAZY_MINT_ADAPTER_ADDRESS,
   SHARED_STORE_FRONT_ADDRESS_MAINNET,
   SHARED_STORE_FRONT_ADDRESS_RINKEBY,
 } from "../constants";
-import { ERC1155 } from "../contracts";
-import { ERC1155Abi } from "../typechain/contracts/ERC1155Abi";
 import {
-  Asset,
   AssetEvent,
-  ECSignature,
   OpenSeaAccount,
   OpenSeaAsset,
   OpenSeaAssetBundle,
@@ -49,140 +27,34 @@ import {
   SaleKind,
   Transaction,
   TxnCallback,
-  UnhashedOrder,
-  UnsignedOrder,
-  Web3Callback,
-  WyvernAsset,
-  WyvernBundle,
-  WyvernFTAsset,
-  WyvernNFTAsset,
   WyvernSchemaName,
 } from "../types";
 
 export { WyvernProtocol };
 
-export const annotateERC721TransferABI = (
-  asset: WyvernNFTAsset
-): AnnotatedFunctionABI => ({
-  constant: false,
-  inputs: [
-    {
-      name: "_to",
-      type: "address",
-      kind: FunctionInputKind.Replaceable,
-    },
-    {
-      name: "_tokenId",
-      type: "uint256",
-      kind: FunctionInputKind.Asset,
-      value: asset.id,
-    },
-  ],
-  target: asset.address,
-  name: "transfer",
-  outputs: [],
-  payable: false,
-  stateMutability: StateMutability.Nonpayable,
-  type: AbiType.Function,
-});
-
-export const annotateERC20TransferABI = (
-  asset: WyvernFTAsset
-): AnnotatedFunctionABI => ({
-  constant: false,
-  inputs: [
-    {
-      name: "_to",
-      type: "address",
-      kind: FunctionInputKind.Replaceable,
-    },
-    {
-      name: "_amount",
-      type: "uint256",
-      kind: FunctionInputKind.Count,
-      value: asset.quantity,
-    },
-  ],
-  target: asset.address,
-  name: "transfer",
-  outputs: [
-    {
-      name: "success",
-      type: "bool",
-      kind: FunctionOutputKind.Other,
-    },
-  ],
-  payable: false,
-  stateMutability: StateMutability.Nonpayable,
-  type: AbiType.Function,
-});
-
 // OTHER
 
 const txCallbacks: { [key: string]: TxnCallback[] } = {};
 
-/**
- * Promisify a callback-syntax web3 function
- * @param inner callback function that accepts a Web3 callback function and passes
- * it to the Web3 function
- */
-async function promisify<T>(inner: (fn: Web3Callback<T>) => void) {
-  return new Promise<T>((resolve, reject) =>
-    inner((err, res) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(res);
-    })
-  );
-}
-
-/**
- * Promisify a call a method on a contract,
- * handling Parity errors. Returns '0x' if error.
- * Note that if T is not "string", this may return a falsey
- * value when the contract doesn't support the method (e.g. `isApprovedForAll`).
- * @param callback An anonymous function that takes a web3 callback
- * and returns a Web3 Contract's call result, e.g. `c => erc721.ownerOf(3, c)`
- * @param onError callback when user denies transaction
- */
-export async function promisifyCall<T>(
-  callback: (fn: Web3Callback<T>) => T,
-  onError?: (error: unknown) => void
-): Promise<T | undefined> {
-  try {
-    const result = await promisify<T>(callback);
-    if (typeof result === "string" && result == "0x") {
-      // Geth compatibility
-      return undefined;
-    }
-    return result as T;
-  } catch (error) {
-    // Probably method not found, and web3 is a Parity node
-    if (onError) {
-      onError(error);
-    } else {
-      console.error(error);
-    }
-    return undefined;
-  }
-}
-
-const track = (web3: Web3, txHash: string, onFinalized: TxnCallback) => {
+const track = (
+  provider: ethers.providers.Provider,
+  txHash: string,
+  onFinalized: TxnCallback
+) => {
   if (txCallbacks[txHash]) {
     txCallbacks[txHash].push(onFinalized);
   } else {
     txCallbacks[txHash] = [onFinalized];
     const poll = async () => {
-      const tx = await web3.eth.getTransaction(txHash);
+      const tx = await provider.getTransaction(txHash);
       if (tx && tx.blockHash && tx.blockHash !== NULL_BLOCK_HASH) {
-        const receipt = await web3.eth.getTransactionReceipt(txHash);
+        const receipt = await provider.getTransactionReceipt(txHash);
         if (!receipt) {
           // Hack: assume success if no receipt
           console.warn("No receipt found for ", txHash);
         }
         const status = receipt.status;
-        txCallbacks[txHash].map((f) => f(status));
+        txCallbacks[txHash].map((f) => f(!!status));
         delete txCallbacks[txHash];
       } else {
         setTimeout(poll, 1000);
@@ -192,9 +64,12 @@ const track = (web3: Web3, txHash: string, onFinalized: TxnCallback) => {
   }
 };
 
-export const confirmTransaction = async (web3: Web3, txHash: string) => {
+export const confirmTransaction = async (
+  provider: ethers.providers.Provider,
+  txHash: string
+) => {
   return new Promise((resolve, reject) => {
-    track(web3, txHash, (didSucceed: boolean) => {
+    track(provider, txHash, (didSucceed: boolean) => {
       if (didSucceed) {
         resolve("Transaction complete!");
       } else {
@@ -512,106 +387,6 @@ export const orderToJSON = (order: Order): OrderJSON => {
   return asJSON;
 };
 
-/**
- * Sign messages using web3 personal signatures
- * @param web3 Web3 instance
- * @param message message to sign
- * @param signerAddress web3 address signing the message
- * @returns A signature if provider can sign, otherwise null
- */
-export async function personalSignAsync(
-  web3: Web3,
-  message: string,
-  signerAddress: string
-): Promise<ECSignature> {
-  const signature = await promisify<JsonRpcResponse | undefined>((c) =>
-    (web3.currentProvider as AbstractProvider).sendAsync(
-      {
-        method: "personal_sign",
-        params: [message, signerAddress],
-        from: signerAddress,
-        id: new Date().getTime(),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any,
-      c
-    )
-  );
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const error = (signature as any).error;
-  if (error) {
-    throw new Error(error);
-  }
-
-  return parseSignatureHex(signature?.result);
-}
-
-/**
- * Sign messages using web3 signTypedData signatures
- * @param web3 Web3 instance
- * @param message message to sign
- * @param signerAddress web3 address signing the message
- * @returns A signature if provider can sign, otherwise null
- */
-export async function signTypedDataAsync(
-  web3: Web3,
-  message: object,
-  signerAddress: string
-): Promise<ECSignature> {
-  let signature: JsonRpcResponse | undefined;
-  try {
-    // Using sign typed data V4 works with a stringified message, used by browser providers i.e. Metamask
-    signature = await promisify<JsonRpcResponse | undefined>((c) =>
-      (web3.currentProvider as AbstractProvider).sendAsync(
-        {
-          method: "eth_signTypedData_v4",
-          params: [signerAddress, JSON.stringify(message)],
-          from: signerAddress,
-          id: new Date().getTime(),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
-        c
-      )
-    );
-  } catch {
-    // Fallback to normal sign typed data for node providers, without using stringified message
-    // https://github.com/coinbase/coinbase-wallet-sdk/issues/60
-    signature = await promisify<JsonRpcResponse | undefined>((c) =>
-      (web3.currentProvider as AbstractProvider).sendAsync(
-        {
-          method: "eth_signTypedData",
-          params: [signerAddress, message],
-          from: signerAddress,
-          id: new Date().getTime(),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
-        c
-      )
-    );
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const error = (signature as any).error;
-  if (error) {
-    throw new Error(error);
-  }
-
-  return parseSignatureHex(signature?.result);
-}
-
-/**
- * Checks whether a given address contains any code
- * @param web3 Web3 instance
- * @param address input address
- */
-export async function isContractAddress(
-  web3: Web3,
-  address: string
-): Promise<boolean> {
-  const code = await web3.eth.getCode(address);
-  return code !== "0x";
-}
-
 export type BigNumberInput = number | string | BigNumber;
 
 /**
@@ -626,199 +401,6 @@ export function makeBigNumber(arg: BigNumberInput): BigNumber {
   // fix "new BigNumber() number type has more than 15 significant digits"
   arg = arg.toString();
   return new BigNumber(arg);
-}
-
-/**
- * Send a transaction to the blockchain and optionally confirm it
- * @param web3 Web3 instance
- * @param param0 __namedParameters
- * @param from address sending transaction
- * @param to destination contract address
- * @param data data to send to contract
- * @param gasPrice gas price to use. If unspecified, uses web3 default (mean gas price)
- * @param value value in ETH to send with data. Defaults to 0
- * @param onError callback when user denies transaction
- */
-export async function sendRawTransaction(
-  web3: Web3,
-  { from, to, data, gasPrice, value = 0, gas }: TxData,
-  onError: (error: unknown) => void
-): Promise<string> {
-  if (gas == null) {
-    // This gas cannot be increased due to an ethjs error
-    gas = await estimateGas(web3, { from, to, data, value });
-  }
-
-  try {
-    const txHashRes = await promisify<string>((c) =>
-      web3.eth.sendTransaction(
-        {
-          from,
-          to,
-          value: value.toString(),
-          data,
-          gas: gas?.toString(),
-          gasPrice: gasPrice?.toString(),
-        },
-        c
-      )
-    );
-    return txHashRes;
-  } catch (error) {
-    onError(error);
-    throw error;
-  }
-}
-
-/**
- * Call a method on a contract, sending arbitrary data and
- * handling Parity errors. Returns '0x' if error.
- * @param web3 Web3 instance
- * @param param0 __namedParameters
- * @param from address sending call
- * @param to destination contract address
- * @param data data to send to contract
- * @param onError callback when user denies transaction
- */
-export async function rawCall(
-  web3: Web3,
-  { from, to, data }: CallData,
-  onError?: (error: unknown) => void
-): Promise<string> {
-  try {
-    const result = await web3.eth.call({
-      from,
-      to,
-      data,
-    });
-    return result;
-  } catch (error) {
-    // Probably method not found, and web3 is a Parity node
-    if (onError) {
-      onError(error);
-    }
-    // Backwards compatibility with Geth nodes
-    return "0x";
-  }
-}
-
-/**
- * Estimate Gas usage for a transaction
- * @param web3 Web3 instance
- * @param from address sending transaction
- * @param to destination contract address
- * @param data data to send to contract
- * @param value value in ETH to send with data
- */
-export async function estimateGas(
-  web3: Web3,
-  { from, to, data, value = 0 }: TxData
-): Promise<number> {
-  const amount = await web3.eth.estimateGas({
-    from,
-    to,
-    value: value.toString(),
-    data,
-  });
-
-  return amount;
-}
-
-/**
- * Get mean gas price for sending a txn, in wei
- * @param web3 Web3 instance
- */
-export async function getCurrentGasPrice(web3: Web3): Promise<BigNumber> {
-  const gasPrice = await web3.eth.getGasPrice();
-  return new BigNumber(gasPrice);
-}
-
-/**
- * Get current transfer fees for an asset
- * @param web3 Web3 instance
- * @param asset The asset to check for transfer fees
- */
-export async function getTransferFeeSettings(
-  web3: Web3,
-  {
-    asset,
-    accountAddress,
-  }: {
-    asset: Asset;
-    accountAddress?: string;
-  }
-) {
-  let transferFee: BigNumber | undefined;
-  let transferFeeTokenAddress: string | undefined;
-
-  if (asset.tokenAddress.toLowerCase() == ENJIN_ADDRESS.toLowerCase()) {
-    // Enjin asset
-    const feeContract = new web3.eth.Contract(
-      ERC1155,
-      asset.tokenAddress
-    ) as unknown as ERC1155Abi;
-
-    const params = await feeContract.methods
-      .transferSettings(asset.tokenId as string)
-      .call({ from: accountAddress });
-    if (params) {
-      transferFee = makeBigNumber(params[3]);
-      if (params[2] === "0") {
-        transferFeeTokenAddress = ENJIN_COIN_ADDRESS;
-      }
-    }
-  }
-  return { transferFee, transferFeeTokenAddress };
-}
-
-// sourced from 0x.js:
-// https://github.com/ProjectWyvern/wyvern-js/blob/39999cb93ce5d80ea90b4382182d1bd4339a9c6c/src/utils/signature_utils.ts
-function parseSignatureHex(signature: string): ECSignature {
-  // HACK: There is no consensus on whether the signatureHex string should be formatted as
-  // v + r + s OR r + s + v, and different clients (even different versions of the same client)
-  // return the signature params in different orders. In order to support all client implementations,
-  // we parse the signature in both ways, and evaluate if either one is a valid signature.
-  const validVParamValues = [27, 28];
-
-  const ecSignatureRSV = _parseSignatureHexAsRSV(signature);
-  if (_.includes(validVParamValues, ecSignatureRSV.v)) {
-    return ecSignatureRSV;
-  }
-
-  // For older clients
-  const ecSignatureVRS = _parseSignatureHexAsVRS(signature);
-  if (_.includes(validVParamValues, ecSignatureVRS.v)) {
-    return ecSignatureVRS;
-  }
-
-  throw new Error("Invalid signature");
-
-  function _parseSignatureHexAsVRS(signatureHex: string) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const signatureBuffer: any = ethUtil.toBuffer(signatureHex);
-    let v = signatureBuffer[0];
-    if (v < 27) {
-      v += 27;
-    }
-    const r = signatureBuffer.slice(1, 33);
-    const s = signatureBuffer.slice(33, 65);
-    const ecSignature = {
-      v,
-      r: ethUtil.bufferToHex(r),
-      s: ethUtil.bufferToHex(s),
-    };
-    return ecSignature;
-  }
-
-  function _parseSignatureHexAsRSV(signatureHex: string) {
-    const { v, r, s } = ethUtil.fromRpcSig(signatureHex);
-    const ecSignature = {
-      v,
-      r: ethUtil.bufferToHex(r),
-      s: ethUtil.bufferToHex(s),
-    };
-    return ecSignature;
-  }
 }
 
 /**
@@ -873,193 +455,12 @@ export function estimateCurrentPrice(
 }
 
 /**
- * Get the Wyvern representation of a fungible asset
- * @param schema The WyvernSchema needed to access this asset
- * @param asset The asset to trade
- * @param quantity The number of items to trade
- */
-export function getWyvernAsset(
-  schema: Schema<WyvernAsset>,
-  asset: Asset,
-  quantity = new BigNumber(1)
-): WyvernAsset {
-  const tokenId = asset.tokenId != null ? asset.tokenId.toString() : undefined;
-
-  return schema.assetFromFields({
-    ID: tokenId,
-    Quantity: quantity.toString(),
-    Address: asset.tokenAddress.toLowerCase(),
-    Name: asset.name,
-  });
-}
-
-/**
- * Get the Wyvern representation of a group of assets
- * Sort order is enforced here. Throws if there's a duplicate.
- * @param assets Assets to bundle
- * @param schemas The WyvernSchemas needed to access each asset, respectively
- * @param quantities The quantity of each asset to bundle, respectively
- */
-export function getWyvernBundle(
-  assets: Asset[],
-  schemas: Array<Schema<WyvernAsset>>,
-  quantities: BigNumber[]
-): WyvernBundle {
-  if (assets.length != quantities.length) {
-    throw new Error("Bundle must have a quantity for every asset");
-  }
-
-  if (assets.length != schemas.length) {
-    throw new Error("Bundle must have a schema for every asset");
-  }
-
-  const wyAssets = assets.map((asset, i) =>
-    getWyvernAsset(schemas[i], asset, quantities[i])
-  );
-
-  const sorters = [
-    (assetAndSchema: { asset: WyvernAsset; schema: WyvernSchemaName }) =>
-      assetAndSchema.asset.address,
-    (assetAndSchema: { asset: WyvernAsset; schema: WyvernSchemaName }) =>
-      assetAndSchema.asset.id || 0,
-  ];
-
-  const wyAssetsAndSchemas = wyAssets.map((asset, i) => ({
-    asset,
-    schema: schemas[i].name as WyvernSchemaName,
-  }));
-
-  const uniqueAssets = _.uniqBy(
-    wyAssetsAndSchemas,
-    (group) => `${sorters[0](group)}-${sorters[1](group)}`
-  );
-
-  if (uniqueAssets.length != wyAssetsAndSchemas.length) {
-    throw new Error("Bundle can't contain duplicate assets");
-  }
-
-  const sortedWyAssetsAndSchemas = _.sortBy(wyAssetsAndSchemas, sorters);
-
-  return {
-    assets: sortedWyAssetsAndSchemas.map((group) => group.asset),
-    schemas: sortedWyAssetsAndSchemas.map((group) => group.schema),
-  };
-}
-
-/**
- * Get the non-prefixed hash for the order
- * (Fixes a Wyvern typescript issue and casing issue)
- * @param order order to hash
- */
-export function getOrderHash(order: UnhashedOrder) {
-  const orderWithStringTypes = {
-    ...order,
-    maker: order.maker.toLowerCase(),
-    taker: order.taker.toLowerCase(),
-    feeRecipient: order.feeRecipient.toLowerCase(),
-    side: order.side.toString(),
-    saleKind: order.saleKind.toString(),
-    howToCall: order.howToCall.toString(),
-    feeMethod: order.feeMethod.toString(),
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return WyvernProtocol.getOrderHashHex(orderWithStringTypes as any);
-}
-
-/**
- * Assign an order and a new matching order to their buy/sell sides
- * @param order Original order
- * @param matchingOrder The result of _makeMatchingOrder
- */
-export function assignOrdersToSides(
-  order: Order,
-  matchingOrder: UnsignedOrder
-): { buy: Order; sell: Order } {
-  const isSellOrder = order.side == OrderSide.Sell;
-
-  let buy: Order;
-  let sell: Order;
-  if (!isSellOrder) {
-    buy = order;
-    sell = {
-      ...matchingOrder,
-      v: buy.v,
-      r: buy.r,
-      s: buy.s,
-    };
-  } else {
-    sell = order;
-    buy = {
-      ...matchingOrder,
-      v: sell.v,
-      r: sell.r,
-      s: sell.s,
-    };
-  }
-
-  return { buy, sell };
-}
-
-/**
  * Delay using setTimeout
  * @param ms milliseconds to wait
  */
 export async function delay(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
-
-/**
- * Validates that an address exists, isn't null, and is properly
- * formatted for Wyvern and OpenSea
- * @param address input address
- */
-export function validateAndFormatWalletAddress(
-  web3: Web3,
-  address: string
-): string {
-  if (!address) {
-    throw new Error("No wallet address found");
-  }
-  if (!web3.utils.isAddress(address)) {
-    throw new Error("Invalid wallet address");
-  }
-  if (address == NULL_ADDRESS) {
-    throw new Error("Wallet cannot be the null address");
-  }
-  return address.toLowerCase();
-}
-
-/**
- * Notify developer when a pattern will be deprecated
- * @param msg message to log to console
- */
-export function onDeprecated(msg: string) {
-  console.warn(`DEPRECATION NOTICE: ${msg}`);
-}
-
-/**
- * Get special-case approval addresses for an erc721 contract
- * @param erc721Contract contract to check
- */
-export async function getNonCompliantApprovalAddress(
-  erc721Contract: Contract,
-  tokenId: string,
-  _accountAddress: string
-): Promise<string | undefined> {
-  const results = await Promise.allSettled([
-    // CRYPTOKITTIES check
-    erc721Contract.methods.kittyIndexToApproved(tokenId).call(),
-    // Etherbots check
-    erc721Contract.methods.partIndexToApproved(tokenId).call(),
-  ]);
-
-  return _.compact(results)[0].status;
-}
-
-export const merkleValidatorByNetwork = {
-  [Network.Main]: MERKLE_VALIDATOR_MAINNET,
-  [Network.Rinkeby]: MERKLE_VALIDATOR_RINKEBY,
-};
 
 /**
  * The longest time that an order is valid for is six months from the current date
@@ -1074,15 +475,6 @@ export const getMaxOrderExpirationTimestamp = () => {
   maxExpirationDate.setDate(maxExpirationDate.getDate() - 1);
 
   return Math.round(maxExpirationDate.getTime() / 1000);
-};
-
-interface ErrorWithCode extends Error {
-  code: string;
-}
-
-export const hasErrorCode = (error: unknown): error is ErrorWithCode => {
-  const untypedError = error as Partial<ErrorWithCode>;
-  return !!untypedError.code;
 };
 
 export const getAssetItemType = (schemaName?: WyvernSchemaName) => {
