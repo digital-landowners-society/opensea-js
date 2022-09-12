@@ -97,6 +97,7 @@ export class OpenSeaSDK {
     this.ethersProvider = signer.provider as ethers.providers.Provider;
     this.seaport = new Seaport(signer, {
       conduitKeyToConduit: CONDUIT_KEYS_TO_CONDUIT,
+      balanceAndApprovalChecksOnOrderCreation: false,
       overrides: {
         defaultConduitKey: CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
       },
