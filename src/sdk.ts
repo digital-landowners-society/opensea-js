@@ -10,12 +10,8 @@ import { providers } from "ethers";
 import { EventEmitter } from "fbemitter";
 import Web3 from "web3";
 import { WyvernProtocol } from "wyvern-js";
-import * as WyvernSchemas from "wyvern-schemas";
-import { Schema } from "wyvern-schemas/dist/types";
 import { OpenSeaAPI } from "./api";
 import {
-  CK_ADDRESS,
-  CK_RINKEBY_ADDRESS,
   CONDUIT_KEYS_TO_CONDUIT,
   DEFAULT_BUYER_FEE_BASIS_POINTS,
   DEFAULT_SELLER_FEE_BASIS_POINTS,
@@ -49,21 +45,12 @@ import {
   OpenSeaAPIConfig,
   OpenSeaAsset,
   OrderSide,
-  TokenStandardVersion,
-  WyvernAsset,
-  WyvernFTAsset,
-  WyvernNFTAsset,
   WyvernSchemaName,
 } from "./types";
-import { encodeTransferCall } from "./utils/schema";
 import {
-  annotateERC20TransferABI,
-  annotateERC721TransferABI,
   confirmTransaction,
   delay,
-  getWyvernAsset,
   makeBigNumber,
-  sendRawTransaction,
   getMaxOrderExpirationTimestamp,
   getAssetItemType,
   BigNumberInput,
@@ -586,81 +573,6 @@ export class OpenSeaSDK {
   }
 
   /**
-   * Transfer a fungible or non-fungible asset to another address
-   * @param param0 __namedParamaters Object
-   * @param fromAddress The owner's wallet address
-   * @param toAddress The recipient's wallet address
-   * @param asset The fungible or non-fungible asset to transfer
-   * @param quantity The amount of the asset to transfer, if it's fungible (optional). In units (not base units), e.g. not wei.
-   * @returns Transaction hash
-   */
-  public async transfer({
-    fromAddress,
-    toAddress,
-    asset,
-    quantity = 1,
-  }: {
-    fromAddress: string;
-    toAddress: string;
-    asset: Asset;
-    quantity?: number | BigNumber;
-  }): Promise<string> {
-    const schema = this._getSchema(this._getSchemaName(asset));
-    const quantityBN = WyvernProtocol.toBaseUnitAmount(
-      makeBigNumber(quantity),
-      asset.decimals || 0
-    );
-    const wyAsset = getWyvernAsset(schema, asset, quantityBN);
-    const isCryptoKitties = [CK_ADDRESS, CK_RINKEBY_ADDRESS].includes(
-      wyAsset.address
-    );
-    // Since CK is common, infer isOldNFT from it in case user
-    // didn't pass in `version`
-    const isOldNFT =
-      isCryptoKitties ||
-      (!!asset.version &&
-        [TokenStandardVersion.ERC721v1, TokenStandardVersion.ERC721v2].includes(
-          asset.version
-        ));
-
-    const abi =
-      this._getSchemaName(asset) === WyvernSchemaName.ERC20
-        ? annotateERC20TransferABI(wyAsset as WyvernFTAsset)
-        : isOldNFT
-        ? annotateERC721TransferABI(wyAsset as WyvernNFTAsset)
-        : schema.functions.transfer(wyAsset);
-
-    this._dispatch(EventType.TransferOne, {
-      accountAddress: fromAddress,
-      toAddress,
-      asset: wyAsset,
-    });
-
-    const data = encodeTransferCall(abi, fromAddress, toAddress);
-    const txHash = await sendRawTransaction(
-      this.web3,
-      {
-        from: fromAddress,
-        to: abi.target,
-        data,
-      },
-      (error) => {
-        this._dispatch(EventType.TransactionDenied, {
-          error,
-          accountAddress: fromAddress,
-        });
-      }
-    );
-
-    await this._confirmTransaction(
-      txHash,
-      EventType.TransferOne,
-      `Transferring asset`
-    );
-    return txHash;
-  }
-
-  /**
    * Compute the `basePrice` and `extra` parameters to be used to price an order.
    * Also validates the expiration time and auction type.
    * @param tokenAddress Address of the ERC-20 token to use for trading.
@@ -776,20 +688,6 @@ export class OpenSeaSDK {
     }
 
     return undefined;
-  }
-
-  private _getSchema(schemaName?: WyvernSchemaName): Schema<WyvernAsset> {
-    const schemaName_ = schemaName || WyvernSchemaName.ERC721;
-    const schema = WyvernSchemas.schemas[this._networkName].filter(
-      (s) => s.name == schemaName_
-    )[0];
-
-    if (!schema) {
-      throw new Error(
-        `Trading for this asset (${schemaName_}) is not yet supported. Please contact us or check back later!`
-      );
-    }
-    return schema;
   }
 
   private _dispatch(event: EventType, data: EventData) {
