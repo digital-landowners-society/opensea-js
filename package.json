@@ -32,7 +32,7 @@
   },
   "types": "lib/index.d.ts",
   "dependencies": {
-    "@opensea/seaport-js": "ssh+git@github.com:digital-landowners-society/seaport-js.git#f5cd632f780f787da8a2a766f9d0a10c5129ce07",
+    "@opensea/seaport-js": "ssh+git@github.com:digital-landowners-society/seaport-js.git#96ea07495454e989717079f2173c3e74c6afcd46",
     "ajv": "^8.11.0",
     "bignumber.js": "9.0.2",
     "ethereumjs-abi": "git+https://github.com/ProjectWyvern/ethereumjs-abi.git",

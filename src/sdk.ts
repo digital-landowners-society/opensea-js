@@ -42,6 +42,7 @@ import {
   Network,
   OpenSeaAPIConfig,
   OpenSeaAsset,
+  OpenSeaFungibleToken,
   OrderSide,
   WyvernSchemaName,
 } from "./types";
@@ -71,6 +72,8 @@ export class OpenSeaSDK {
   private _wrappedNFTFactoryAddress: string;
   private _wrappedNFTLiquidationProxyAddress: string;
   private _uniswapFactoryAddress: string;
+  private _tokensCache: { [address: string]: OpenSeaFungibleToken } = {};
+  private _assetCache: { [tokenAddress: string]: OpenSeaAsset } = {};
 
   /**
    * Your very own seaport.
@@ -249,7 +252,14 @@ export class OpenSeaSDK {
     paymentTokenAddress =
       paymentTokenAddress ?? WETH_ADDRESS_BY_NETWORK[this._networkName];
 
-    const openseaAsset = await this.api.getAsset(asset);
+    let openseaAsset = this._assetCache[asset.tokenAddress];
+    if (openseaAsset) {
+      openseaAsset.tokenId = asset.tokenId;
+    } else {
+      openseaAsset = await this.api.getAsset(asset);
+      this._assetCache[asset.tokenAddress] = openseaAsset;
+    }
+
     const considerationAssetItems = this.getAssetItems(
       [openseaAsset],
       [makeBigNumber(quantity)]
@@ -262,6 +272,7 @@ export class OpenSeaSDK {
       makeBigNumber(startAmount)
     );
 
+    // TODO check why we need async here
     const { openseaSellerFee, collectionSellerFees: collectionSellerFees } =
       await this.getFees({
         openseaAsset,
@@ -278,6 +289,7 @@ export class OpenSeaSDK {
             amount: basePrice.toString(),
           },
         ],
+        counter: 0, // TODO we provide 0 in every case but we need to check what is the meaning of this field
         consideration: [...considerationAssetItems, ...considerationFeeItems],
         endTime:
           expirationTime?.toString() ??
@@ -568,11 +580,14 @@ export class OpenSeaSDK {
       endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
     const paymentToken = tokenAddress.toLowerCase();
     const isEther = tokenAddress == NULL_ADDRESS;
-    const { tokens } = await this.api.getPaymentTokens({
-      address: paymentToken,
-    });
-    const token = tokens[0];
-
+    let token = this._tokensCache[paymentToken];
+    if (token === null) {
+      const { tokens } = await this.api.getPaymentTokens({
+        address: paymentToken,
+      });
+      token = tokens[0];
+      this._tokensCache[paymentToken] = token;
+    }
     // Validation
     if (startAmount.isNaN() || startAmount == null || startAmount.lt(0)) {
       throw new Error(`Starting price must be a number >= 0`);
