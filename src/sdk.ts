@@ -581,7 +581,7 @@ export class OpenSeaSDK {
     const paymentToken = tokenAddress.toLowerCase();
     const isEther = tokenAddress == NULL_ADDRESS;
     let token = this._tokensCache[paymentToken];
-    if (token === null) {
+    if (!token) {
       const { tokens } = await this.api.getPaymentTokens({
         address: paymentToken,
       });
