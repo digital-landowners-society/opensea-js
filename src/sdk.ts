@@ -8,7 +8,6 @@ import {
 } from "@opensea/seaport-js/lib/types";
 import { BigNumber } from "bignumber.js";
 import { ethers, providers } from "ethers";
-import { EventEmitter } from "fbemitter";
 import { OpenSeaAPI } from "./api";
 import {
   CONDUIT_KEYS_TO_CONDUIT,
@@ -24,8 +23,6 @@ import {
 import { OrderV2 } from "./orders/types";
 import {
   Asset,
-  EventData,
-  EventType,
   Fees,
   Network,
   OpenSeaAPIConfig,
@@ -56,7 +53,6 @@ export class OpenSeaSDK {
   public readonly api: OpenSeaAPI;
 
   private _networkName: Network;
-  private _emitter: EventEmitter;
   private _tokensCache: { [address: string]: OpenSeaFungibleToken } = {};
   private _assetCache: { [tokenAddress: string]: OpenSeaAsset } = {};
 
@@ -89,9 +85,6 @@ export class OpenSeaSDK {
         defaultConduitKey: CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
       },
     });
-
-    // Emit events
-    this._emitter = new EventEmitter();
 
     // Debugging: default to nothing
     this.logger = logger || ((arg: string) => arg);
@@ -415,11 +408,7 @@ export class OpenSeaSDK {
         throw new Error("Unsupported protocol");
     }
 
-    await this._confirmTransaction(
-      transactionHash,
-      EventType.MatchOrders,
-      "Fulfilling order"
-    );
+    await this._confirmTransaction(transactionHash, "Fulfilling order");
     return transactionHash;
   }
 
@@ -449,8 +438,6 @@ export class OpenSeaSDK {
     order: OrderV2;
     accountAddress: string;
   }) {
-    this._dispatch(EventType.CancelOrder, { orderV2: order, accountAddress });
-
     // Transact and get the transaction hash
     let transactionHash: string;
     switch (order.protocolAddress) {
@@ -466,11 +453,7 @@ export class OpenSeaSDK {
     }
 
     // Await transaction confirmation
-    await this._confirmTransaction(
-      transactionHash,
-      EventType.CancelOrder,
-      "Cancelling order"
-    );
+    await this._confirmTransaction(transactionHash, "Cancelling order");
   }
 
   /**
@@ -619,22 +602,15 @@ export class OpenSeaSDK {
     return undefined;
   }
 
-  private _dispatch(event: EventType, data: EventData) {
-    this._emitter.emit(event, data);
-  }
-
   private async _confirmTransaction(
     transactionHash: string,
-    event: EventType,
     description: string,
     testForSuccess?: () => Promise<boolean>
   ): Promise<void> {
-    const transactionEventData = { transactionHash, event };
     this.logger(`Transaction started: ${description}`);
 
     if (transactionHash == NULL_BLOCK_HASH) {
       // This was a smart contract wallet that doesn't know the transaction
-      this._dispatch(EventType.TransactionCreated, { event });
 
       if (!testForSuccess) {
         // Wait if test not implemented
@@ -644,7 +620,6 @@ export class OpenSeaSDK {
       }
 
       return await this._pollCallbackForConfirmation(
-        event,
         description,
         testForSuccess
       );
@@ -652,22 +627,15 @@ export class OpenSeaSDK {
 
     // Normal wallet
     try {
-      this._dispatch(EventType.TransactionCreated, transactionEventData);
       await confirmTransaction(this.ethersProvider, transactionHash);
       this.logger(`Transaction succeeded: ${description}`);
-      this._dispatch(EventType.TransactionConfirmed, transactionEventData);
     } catch (error) {
       this.logger(`Transaction failed: ${description}`);
-      this._dispatch(EventType.TransactionFailed, {
-        ...transactionEventData,
-        error,
-      });
       throw error;
     }
   }
 
   private async _pollCallbackForConfirmation(
-    event: EventType,
     description: string,
     testForSuccess: () => Promise<boolean>
   ): Promise<void> {
@@ -678,7 +646,6 @@ export class OpenSeaSDK {
         const wasSuccessful = await testForSuccess();
         if (wasSuccessful) {
           this.logger(`Transaction succeeded: ${description}`);
-          this._dispatch(EventType.TransactionConfirmed, { event });
           return resolve();
         } else if (retries <= 0) {
           return reject();

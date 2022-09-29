@@ -33,18 +33,12 @@
   "dependencies": {
     "@opensea/seaport-js": "ssh+git@github.com:digital-landowners-society/seaport-js.git#96ea07495454e989717079f2173c3e74c6afcd46",
     "bignumber.js": "9.0.2",
-    "ethereumjs-abi": "git+https://github.com/ProjectWyvern/ethereumjs-abi.git",
-    "ethereumjs-util": "^5.2.0",
     "ethers": "^5.6.6",
-    "fbemitter": "2.1.1",
-    "isomorphic-unfetch": "^2.1.1",
     "query-string": "^6.11.1"
   },
   "devDependencies": {
     "@types/chai": "4.3.0",
     "@types/chai-as-promised": "^7.1.5",
-    "@types/fbemitter": "^2.0.32",
-    "@types/lodash": "^4.14.178",
     "@types/mocha": "^9.0.0",
     "@types/node": "^9.3.0",
     "@types/query-string": "^6.1.0",
@@ -61,7 +55,6 @@
     "eslint-plugin-import": "^2.25.3",
     "eslint-plugin-jest": "^25.3.0",
     "eslint-plugin-prettier": "^4.0.0",
-    "ethereum-types": "^3.6.0",
     "husky": "7.0.4",
     "lint-staged": "12.1.2",
     "mocha": "^9.1.3",
@@ -69,10 +62,8 @@
     "prettier-package-json": "2.6.0",
     "ts-node": "10.4.0",
     "typechain": "^7.0.0",
-    "typedoc": "0.22.10",
     "types-bn": "^0.0.1",
-    "types-ethereumjs-util": "0.0.8",
-    "typescript": "4.5.4"
+    "typescript": "4.8.4"
   },
   "keywords": [
     "collectibles",

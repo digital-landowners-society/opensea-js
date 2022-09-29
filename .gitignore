@@ -69,8 +69,3 @@ lib
 docs
 
 .DS_Store
-
-# Auto generated typechain contracts
-src/typechain/contracts/
-
-package-lock.json
