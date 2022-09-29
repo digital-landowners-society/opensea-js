@@ -9,7 +9,6 @@ import {
 import { BigNumber } from "bignumber.js";
 import { ethers, providers } from "ethers";
 import { EventEmitter } from "fbemitter";
-import { WyvernProtocol } from "wyvern-js";
 import { OpenSeaAPI } from "./api";
 import {
   CONDUIT_KEYS_TO_CONDUIT,
@@ -20,19 +19,8 @@ import {
   CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
   OPENSEA_FEE_RECIPIENT,
   DEFAULT_ZONE_BY_NETWORK,
-  UNISWAP_FACTORY_ADDRESS_MAINNET,
-  UNISWAP_FACTORY_ADDRESS_RINKEBY,
   WETH_ADDRESS_BY_NETWORK,
-  WRAPPED_NFT_FACTORY_ADDRESS_MAINNET,
-  WRAPPED_NFT_FACTORY_ADDRESS_RINKEBY,
-  WRAPPED_NFT_LIQUIDATION_PROXY_ADDRESS_MAINNET,
-  WRAPPED_NFT_LIQUIDATION_PROXY_ADDRESS_RINKEBY,
 } from "./constants";
-import {
-  constructPrivateListingCounterOrder,
-  getPrivateListingConsiderations,
-  getPrivateListingFulfillments,
-} from "./orders/privateListings";
 import { OrderV2 } from "./orders/types";
 import {
   Asset,
@@ -42,8 +30,9 @@ import {
   Network,
   OpenSeaAPIConfig,
   OpenSeaAsset,
+  OpenSeaFungibleToken,
   OrderSide,
-  WyvernSchemaName,
+  SchemaName,
 } from "./types";
 import {
   confirmTransaction,
@@ -54,7 +43,7 @@ import {
   BigNumberInput,
   getAddressAfterRemappingSharedStorefrontAddressToLazyMintAdapterAddress,
   feesToBasisPoints,
-} from "./utils/utils";
+} from "./utils";
 
 export class OpenSeaSDK {
   // Ethers provider
@@ -68,9 +57,8 @@ export class OpenSeaSDK {
 
   private _networkName: Network;
   private _emitter: EventEmitter;
-  private _wrappedNFTFactoryAddress: string;
-  private _wrappedNFTLiquidationProxyAddress: string;
-  private _uniswapFactoryAddress: string;
+  private _tokensCache: { [address: string]: OpenSeaFungibleToken } = {};
+  private _assetCache: { [tokenAddress: string]: OpenSeaAsset } = {};
 
   /**
    * Your very own seaport.
@@ -101,20 +89,6 @@ export class OpenSeaSDK {
         defaultConduitKey: CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
       },
     });
-
-    // WrappedNFTLiquidationProxy Config
-    this._wrappedNFTFactoryAddress =
-      this._networkName == Network.Main
-        ? WRAPPED_NFT_FACTORY_ADDRESS_MAINNET
-        : WRAPPED_NFT_FACTORY_ADDRESS_RINKEBY;
-    this._wrappedNFTLiquidationProxyAddress =
-      this._networkName == Network.Main
-        ? WRAPPED_NFT_LIQUIDATION_PROXY_ADDRESS_MAINNET
-        : WRAPPED_NFT_LIQUIDATION_PROXY_ADDRESS_RINKEBY;
-    this._uniswapFactoryAddress =
-      this._networkName == Network.Main
-        ? UNISWAP_FACTORY_ADDRESS_MAINNET
-        : UNISWAP_FACTORY_ADDRESS_RINKEBY;
 
     // Emit events
     this._emitter = new EventEmitter();
@@ -199,7 +173,7 @@ export class OpenSeaSDK {
   private getAssetItems(
     assets: Asset[],
     quantities: BigNumber[] = [],
-    fallbackSchema?: WyvernSchemaName
+    fallbackSchema?: SchemaName
   ): CreateInputItem[] {
     return assets.map((asset, index) => ({
       itemType: getAssetItemType(this._getSchemaName(asset) ?? fallbackSchema),
@@ -249,7 +223,14 @@ export class OpenSeaSDK {
     paymentTokenAddress =
       paymentTokenAddress ?? WETH_ADDRESS_BY_NETWORK[this._networkName];
 
-    const openseaAsset = await this.api.getAsset(asset);
+    let openseaAsset = this._assetCache[asset.tokenAddress];
+    if (openseaAsset) {
+      openseaAsset.tokenId = asset.tokenId;
+    } else {
+      openseaAsset = await this.api.getAsset(asset);
+      this._assetCache[asset.tokenAddress] = openseaAsset;
+    }
+
     const considerationAssetItems = this.getAssetItems(
       [openseaAsset],
       [makeBigNumber(quantity)]
@@ -262,6 +243,7 @@ export class OpenSeaSDK {
       makeBigNumber(startAmount)
     );
 
+    // TODO check why we need async here
     const { openseaSellerFee, collectionSellerFees: collectionSellerFees } =
       await this.getFees({
         openseaAsset,
@@ -278,6 +260,7 @@ export class OpenSeaSDK {
             amount: basePrice.toString(),
           },
         ],
+        counter: 0, // TODO we provide 0 in every case but we need to check what is the meaning of this field
         consideration: [...considerationAssetItems, ...considerationFeeItems],
         endTime:
           expirationTime?.toString() ??
@@ -366,13 +349,11 @@ export class OpenSeaSDK {
     const considerationFeeItems = [
       sellerFee,
       openseaSellerFee,
-      collectionSellerFees,
-    ].filter((item): item is ConsiderationInputItem => item !== undefined);
+      ...collectionSellerFees,
+    ];
 
     if (buyerAddress) {
-      considerationFeeItems.push(
-        ...getPrivateListingConsiderations(offerAssetItems, buyerAddress)
-      );
+      throw new Error("Buyer address is not supported yet");
     }
 
     const { executeAllActions } = await this.seaport.createOrder(
@@ -396,52 +377,6 @@ export class OpenSeaSDK {
     return this.api.postOrder(order, { protocol: "seaport", side: "ask" });
   }
 
-  private async fulfillPrivateOrder({
-    order,
-    accountAddress,
-  }: {
-    order: OrderV2;
-    accountAddress: string;
-  }): Promise<string> {
-    let transactionHash: string;
-    switch (order.protocolAddress) {
-      case CROSS_CHAIN_SEAPORT_ADDRESS: {
-        if (!order.taker?.address) {
-          throw new Error(
-            "Order is not a private listing must have a taker address"
-          );
-        }
-        const counterOrder = constructPrivateListingCounterOrder(
-          order.protocolData,
-          order.taker.address
-        );
-        const fulfillments = getPrivateListingFulfillments(order.protocolData);
-        const transaction = await this.seaport
-          .matchOrders({
-            orders: [order.protocolData, counterOrder],
-            fulfillments,
-            overrides: {
-              value: counterOrder.parameters.offer[0].startAmount,
-            },
-            accountAddress,
-          })
-          .transact();
-        const transactionReceipt = await transaction.wait();
-        transactionHash = transactionReceipt.transactionHash;
-        break;
-      }
-      default:
-        throw new Error("Unsupported protocol");
-    }
-
-    await this._confirmTransaction(
-      transactionHash,
-      EventType.MatchOrders,
-      "Fulfilling order"
-    );
-    return transactionHash;
-  }
-
   /**
    * Fullfill or "take" an order for an asset, either a buy or sell order
    * @param options fullfillment options
@@ -461,15 +396,7 @@ export class OpenSeaSDK {
   }): Promise<string> {
     const isPrivateListing = !!order.taker;
     if (isPrivateListing) {
-      if (recipientAddress) {
-        throw new Error(
-          "Private listings cannot be fulfilled with a recipient address"
-        );
-      }
-      return this.fulfillPrivateOrder({
-        order,
-        accountAddress,
-      });
+      throw new Error("Private listings cannot be fulfilled");
     }
 
     let transactionHash: string;
@@ -547,13 +474,41 @@ export class OpenSeaSDK {
   }
 
   /**
+   *A baseUnit is defined as the smallest denomination of a token. An amount expressed in baseUnits is the amount expressed in the smallest denomination. E.g: 1 unit of a token with 18 decimal places is expressed in baseUnits as 1000000000000000000
+   *Params:
+   *    amount – The amount of units that you would like converted to baseUnits.
+   *decimals – The number of decimal places the unit amount has.
+   *Returns:
+   *    The amount in baseUnits.
+   */
+  public static toBaseUnitAmount(
+    amount: BigNumber,
+    decimals: number
+  ): BigNumber {
+    // assert.isBigNumber("amount", amount);
+    // assert.isNumber("decimals", decimals);
+    const unit = new BigNumber(10).pow(decimals);
+    const baseUnitAmount = amount.times(unit);
+    const hasDecimals = baseUnitAmount.decimalPlaces() !== 0;
+    if (hasDecimals) {
+      throw new Error(
+        `Invalid unit amount: ${amount.toString()} - Too many decimal places`
+      );
+    }
+    return baseUnitAmount;
+  }
+
+  /**
    * Compute the `basePrice` and `extra` parameters to be used to price an order.
    * Also validates the expiration time and auction type.
    * @param tokenAddress Address of the ERC-20 token to use for trading.
    * Use the null address for ETH
    * @param expirationTime When the auction expires, or 0 if never.
+   * @param orderSide Side of the order, either buy or sell
    * @param startAmount The base value for the order, in the token's main units (e.g. ETH instead of wei)
    * @param endAmount The end value for the order, in the token's main units (e.g. ETH instead of wei). If unspecified, the order's `extra` attribute will be 0
+   * @param waitingForBestCounterOrder Whether the order is a "best counter order" or not
+   * @param englishAuctionReservePrice The reserve price for an English auction
    */
   private async _getPriceParameters(
     orderSide: OrderSide,
@@ -568,13 +523,16 @@ export class OpenSeaSDK {
       endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
     const paymentToken = tokenAddress.toLowerCase();
     const isEther = tokenAddress == NULL_ADDRESS;
-    const { tokens } = await this.api.getPaymentTokens({
-      address: paymentToken,
-    });
-    const token = tokens[0];
-
+    let token = this._tokensCache[paymentToken];
+    if (!token) {
+      const { tokens } = await this.api.getPaymentTokens({
+        address: paymentToken,
+      });
+      token = tokens[0];
+      this._tokensCache[paymentToken] = token;
+    }
     // Validation
-    if (startAmount.isNaN() || startAmount == null || startAmount.lt(0)) {
+    if (startAmount.isNaN() || startAmount.lt(0)) {
       throw new Error(`Starting price must be a number >= 0`);
     }
     if (!isEther && !token) {
@@ -615,27 +573,25 @@ export class OpenSeaSDK {
       );
     }
 
-    // Note: WyvernProtocol.toBaseUnitAmount(makeBigNumber(startAmount), token.decimals)
-    // will fail if too many decimal places, so special-case ether
     const basePrice = isEther
       ? makeBigNumber(
           ethers.utils.parseEther(startAmount.toString()).toString()
         ).integerValue()
-      : WyvernProtocol.toBaseUnitAmount(startAmount, token.decimals);
+      : OpenSeaSDK.toBaseUnitAmount(startAmount, token.decimals);
 
     const endPrice = endAmount
       ? isEther
         ? makeBigNumber(
             ethers.utils.parseEther(endAmount.toString()).toString()
           ).integerValue()
-        : WyvernProtocol.toBaseUnitAmount(endAmount, token.decimals)
+        : OpenSeaSDK.toBaseUnitAmount(endAmount, token.decimals)
       : undefined;
 
     const extra = isEther
       ? makeBigNumber(
           ethers.utils.parseEther(priceDiff.toString()).toString()
         ).integerValue()
-      : WyvernProtocol.toBaseUnitAmount(priceDiff, token.decimals);
+      : OpenSeaSDK.toBaseUnitAmount(priceDiff, token.decimals);
 
     const reservePrice = englishAuctionReservePrice
       ? isEther
@@ -644,7 +600,7 @@ export class OpenSeaSDK {
               .parseEther(englishAuctionReservePrice.toString())
               .toString()
           ).integerValue()
-        : WyvernProtocol.toBaseUnitAmount(
+        : OpenSeaSDK.toBaseUnitAmount(
             englishAuctionReservePrice,
             token.decimals
           )

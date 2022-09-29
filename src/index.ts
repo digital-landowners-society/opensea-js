@@ -2,16 +2,7 @@
 import { OpenSeaAPI } from "./api";
 import { OpenSeaSDK } from "./sdk";
 import { Network, EventData, EventType } from "./types";
-export { orderToJSON, orderFromJSON, WyvernProtocol } from "./utils/utils";
-export {
-  encodeCall,
-  encodeSell,
-  encodeAtomicizedBuy,
-  encodeAtomicizedSell,
-  encodeDefaultCall,
-  encodeReplacementPattern,
-  AbiType,
-} from "./utils/schema";
+export { orderToJSON, orderFromJSON } from "./utils/utils";
 
 /**
  * Example setup:

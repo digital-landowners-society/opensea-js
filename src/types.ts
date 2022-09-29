@@ -1,15 +1,58 @@
 /* eslint-disable import/no-unused-modules */
 import BigNumber from "bignumber.js";
-import { AbiItem } from "web3-utils";
-import {
-  ECSignature,
-  HowToCall,
-  Network,
-  Order as WyvernOrder,
-  WyvernProtocolConfig,
-} from "wyvern-js/lib/types";
-import type { Token } from "wyvern-schemas/dist/types";
 import type { OrderV2 } from "./orders/types";
+
+interface WyvernOrder {
+  exchange: string;
+  maker: string;
+  taker: string;
+  makerRelayerFee: BigNumber;
+  takerRelayerFee: BigNumber;
+  makerProtocolFee: BigNumber;
+  takerProtocolFee: BigNumber;
+  feeRecipient: string;
+  feeMethod: number;
+  side: number;
+  saleKind: number;
+  target: string;
+  howToCall: number;
+  calldata: string;
+  replacementPattern: string;
+  staticTarget: string;
+  staticExtradata: string;
+  paymentToken: string;
+  basePrice: BigNumber;
+  extra: BigNumber;
+  listingTime: BigNumber;
+  expirationTime: BigNumber;
+  salt: BigNumber;
+}
+
+interface Token {
+  name: string;
+  symbol: string;
+  decimals: number;
+  address: string;
+}
+
+enum HowToCall {
+  Call = 0,
+  DelegateCall = 1,
+  StaticCall = 2,
+  Create = 3,
+}
+
+interface ECSignature {
+  v: number;
+  r: string;
+  s: string;
+}
+
+enum Network {
+  Main = "main",
+  Rinkeby = "rinkeby",
+  Goerli = "goerli",
+}
 
 export { HowToCall, Network };
 export type { ECSignature };
@@ -102,13 +145,7 @@ export interface OpenSeaAPIConfig {
   useReadOnlyProvider?: boolean;
   // Sent to WyvernJS
   gasPrice?: BigNumber;
-
-  wyvernConfig?: WyvernConfig;
 }
-
-export type WyvernConfig = WyvernProtocolConfig & {
-  wyvernTokenTransferProxyContractAddress?: string;
-};
 
 /**
  * Wyvern order side: buy or sell.
@@ -150,7 +187,7 @@ export enum AssetContractType {
 }
 
 // Wyvern Schemas (see https://github.com/ProjectOpenSea/wyvern-schemas)
-export enum WyvernSchemaName {
+export enum SchemaName {
   ERC20 = "ERC20",
   ERC721 = "ERC721",
   ERC721v3 = "ERC721v3",
@@ -201,7 +238,7 @@ export type WyvernAsset = WyvernNFTAsset | WyvernFTAsset;
 // Abstractions over Wyvern assets for bundles
 export interface WyvernBundle {
   assets: WyvernAsset[];
-  schemas: WyvernSchemaName[];
+  schemas: SchemaName[];
   name?: string;
   description?: string;
   external_link?: string;
@@ -251,7 +288,7 @@ export interface Asset {
   // The asset's contract address
   tokenAddress: string;
   // The Wyvern schema name (e.g. "ERC721") for this asset
-  schemaName?: WyvernSchemaName;
+  schemaName?: SchemaName;
   // The token standard version of this asset
   version?: TokenStandardVersion;
   // Optional for ENS names
@@ -271,7 +308,7 @@ export interface OpenSeaAssetContract extends OpenSeaFees {
   // Type of token (fungible/NFT)
   type: AssetContractType;
   // Wyvern Schema Name for this contract
-  schemaName: WyvernSchemaName;
+  schemaName: SchemaName;
 
   // Total fee levied on sellers by this contract, in basis points
   sellerFeeBasisPoints: number;
@@ -563,7 +600,7 @@ export interface ComputedFees extends OpenSeaFees {
 
 interface ExchangeMetadataForAsset {
   asset: WyvernAsset;
-  schema: WyvernSchemaName;
+  schema: SchemaName;
   referrerAddress?: string;
 }
 
@@ -727,7 +764,4 @@ export interface OrderbookResponse {
 }
 
 // Types related to Web3
-export type Web3Callback<T> = (err: Error | null, result: T) => void;
 export type TxnCallback = (result: boolean) => void;
-
-export type PartialReadonlyContractAbi = AbiItem[];

@@ -17,8 +17,7 @@
     "lib"
   ],
   "scripts": {
-    "abi-type-gen": "yarn run typechain --target=web3-v1 src/abi/*.json --out-dir=src/typechain/contracts",
-    "build": "yarn abi-type-gen && tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json",
     "check-types": "tsc --noEmit --project tsconfig.json",
     "coverage-report": "nyc report --reporter=text-lcov | coveralls",
     "docs-build": "typedoc --out docs src/index.ts",
@@ -32,22 +31,16 @@
   },
   "types": "lib/index.d.ts",
   "dependencies": {
-    "@opensea/seaport-js": "ssh+git@github.com:digital-landowners-society/seaport-js.git#f5cd632f780f787da8a2a766f9d0a10c5129ce07",
-    "ajv": "^8.11.0",
+    "@opensea/seaport-js": "ssh+git@github.com:digital-landowners-society/seaport-js.git#96ea07495454e989717079f2173c3e74c6afcd46",
     "bignumber.js": "9.0.2",
     "ethereumjs-abi": "git+https://github.com/ProjectWyvern/ethereumjs-abi.git",
     "ethereumjs-util": "^5.2.0",
     "ethers": "^5.6.6",
     "fbemitter": "2.1.1",
     "isomorphic-unfetch": "^2.1.1",
-    "lodash": "^4.17.21",
-    "query-string": "^6.11.1",
-    "web3": "1.7.0",
-    "wyvern-js": "git+https://github.com/ProjectOpenSea/wyvern-js.git#d283749f3d983a9c9e2e4da925441f75e170c9f0",
-    "wyvern-schemas": "git+https://github.com/ProjectOpenSea/wyvern-schemas.git#3290fc095649f5552b560bfcb1f0fa49acf13894"
+    "query-string": "^6.11.1"
   },
   "devDependencies": {
-    "@typechain/web3-v1": "^5.0.0",
     "@types/chai": "4.3.0",
     "@types/chai-as-promised": "^7.1.5",
     "@types/fbemitter": "^2.0.32",
@@ -72,7 +65,6 @@
     "husky": "7.0.4",
     "lint-staged": "12.1.2",
     "mocha": "^9.1.3",
-    "nyc": "^15.1.0",
     "prettier": "2.5.1",
     "prettier-package-json": "2.6.0",
     "ts-node": "10.4.0",
