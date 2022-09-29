@@ -133,7 +133,7 @@ export const assetFromJSON = (asset: any): OpenSeaAsset => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const assetEventFromJSON = (assetEvent: any): AssetEvent => {
+const assetEventFromJSON = (assetEvent: any): AssetEvent => {
   return {
     eventType: assetEvent.event_type,
     eventTimestamp: assetEvent.event_timestamp,
@@ -149,7 +149,7 @@ export const assetEventFromJSON = (assetEvent: any): AssetEvent => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const transactionFromJSON = (transaction: any): Transaction => {
+const transactionFromJSON = (transaction: any): Transaction => {
   return {
     fromAccount: accountFromJSON(transaction.from_account),
     toAccount: accountFromJSON(transaction.to_account),
@@ -174,7 +174,7 @@ export const accountFromJSON = (account: any): OpenSeaAccount => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const userFromJSON = (user: any): OpenSeaUser => {
+const userFromJSON = (user: any): OpenSeaUser => {
   return {
     username: user.username,
   };
@@ -182,7 +182,7 @@ export const userFromJSON = (user: any): OpenSeaUser => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const assetBundleFromJSON = (asset_bundle: any): OpenSeaAssetBundle => {
-  const fromJSON: OpenSeaAssetBundle = {
+  return {
     maker: asset_bundle.maker,
     assets: asset_bundle.assets ? asset_bundle.assets.map(assetFromJSON) : [],
     assetContract: asset_bundle.asset_contract
@@ -198,11 +198,9 @@ export const assetBundleFromJSON = (asset_bundle: any): OpenSeaAssetBundle => {
       ? asset_bundle.sell_orders.map(orderFromJSON)
       : null,
   };
-
-  return fromJSON;
 };
 
-export const assetContractFromJSON = (
+const assetContractFromJSON = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   asset_contract: any
 ): OpenSeaAssetContract => {
@@ -227,7 +225,7 @@ export const assetContractFromJSON = (
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const collectionFromJSON = (collection: any): OpenSeaCollection => {
+const collectionFromJSON = (collection: any): OpenSeaCollection => {
   const createdDate = new Date(`${collection.created_date}Z`);
 
   return {
@@ -261,7 +259,7 @@ export const collectionFromJSON = (collection: any): OpenSeaCollection => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const tokenFromJSON = (token: any): OpenSeaFungibleToken => {
-  const fromJSON: OpenSeaFungibleToken = {
+  return {
     name: token.name,
     symbol: token.symbol,
     decimals: token.decimals,
@@ -270,8 +268,6 @@ export const tokenFromJSON = (token: any): OpenSeaFungibleToken => {
     ethPrice: token.eth_price,
     usdPrice: token.usd_price,
   };
-
-  return fromJSON;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -342,7 +338,7 @@ export const orderFromJSON = (order: any): Order => {
  * @param order order (hashed or unhashed)
  */
 export const orderToJSON = (order: Order): OrderJSON => {
-  const asJSON: OrderJSON = {
+  return {
     exchange: order.exchange.toLowerCase(),
     maker: order.maker.toLowerCase(),
     taker: order.taker.toLowerCase(),
@@ -381,7 +377,6 @@ export const orderToJSON = (order: Order): OrderJSON => {
 
     nonce: order.nonce,
   };
-  return asJSON;
 };
 
 export type BigNumberInput = number | string | BigNumber;
@@ -407,7 +402,7 @@ export function makeBigNumber(arg: BigNumberInput): BigNumber {
  *  to fix race conditions
  * @param shouldRoundUp Whether to round up fractional wei
  */
-export function estimateCurrentPrice(
+function estimateCurrentPrice(
   order: Order,
   secondsToBacktrack = 30,
   shouldRoundUp = true

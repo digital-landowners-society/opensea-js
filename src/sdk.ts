@@ -43,7 +43,7 @@ import {
   BigNumberInput,
   getAddressAfterRemappingSharedStorefrontAddressToLazyMintAdapterAddress,
   feesToBasisPoints,
-} from "./utils/utils";
+} from "./utils";
 
 export class OpenSeaSDK {
   // Ethers provider
@@ -504,8 +504,11 @@ export class OpenSeaSDK {
    * @param tokenAddress Address of the ERC-20 token to use for trading.
    * Use the null address for ETH
    * @param expirationTime When the auction expires, or 0 if never.
+   * @param orderSide Side of the order, either buy or sell
    * @param startAmount The base value for the order, in the token's main units (e.g. ETH instead of wei)
    * @param endAmount The end value for the order, in the token's main units (e.g. ETH instead of wei). If unspecified, the order's `extra` attribute will be 0
+   * @param waitingForBestCounterOrder Whether the order is a "best counter order" or not
+   * @param englishAuctionReservePrice The reserve price for an English auction
    */
   private async _getPriceParameters(
     orderSide: OrderSide,
@@ -529,7 +532,7 @@ export class OpenSeaSDK {
       this._tokensCache[paymentToken] = token;
     }
     // Validation
-    if (startAmount.isNaN() || startAmount == null || startAmount.lt(0)) {
+    if (startAmount.isNaN() || startAmount.lt(0)) {
       throw new Error(`Starting price must be a number >= 0`);
     }
     if (!isEther && !token) {

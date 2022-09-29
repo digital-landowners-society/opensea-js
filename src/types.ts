@@ -764,5 +764,4 @@ export interface OrderbookResponse {
 }
 
 // Types related to Web3
-export type Web3Callback<T> = (err: Error | null, result: T) => void;
 export type TxnCallback = (result: boolean) => void;

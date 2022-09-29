@@ -30,7 +30,7 @@ import {
   assetFromJSON,
   delay,
   tokenFromJSON,
-} from "./utils/utils";
+} from "./utils";
 
 export class OpenSeaAPI {
   /**
