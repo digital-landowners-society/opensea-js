@@ -1,11 +1,6 @@
 import "isomorphic-unfetch";
 import * as QueryString from "query-string";
-import {
-  API_BASE_MAINNET,
-  API_BASE_TESTNET,
-  API_PATH,
-  ORDERBOOK_PATH,
-} from "./constants";
+import { API_BASE_MAINNET, API_BASE_TESTNET, API_PATH } from "./constants";
 import {
   OrderAPIOptions,
   OrdersPostQueryResponse,
@@ -155,46 +150,6 @@ export class OpenSeaAPI {
       return this.postOrder(order, apiOptions, { retries: retries - 1 });
     }
     return deserializeOrder(response.order);
-  }
-
-  /**
-   * Create a whitelist entry for an asset to prevent others from buying.
-   * Buyers will have to have verified at least one of the emails
-   * on an asset in order to buy.
-   * This will throw a 403 if the given API key isn't allowed to create whitelist entries for this contract or asset.
-   * @param tokenAddress Address of the asset's contract
-   * @param tokenId The asset's token ID
-   * @param email The email allowed to buy.
-   */
-  public async postAssetWhitelist(
-    tokenAddress: string,
-    tokenId: string | number,
-    email: string
-  ): Promise<boolean> {
-    const json = await this.post<{ success: boolean }>(
-      `${API_PATH}/asset/${tokenAddress}/${tokenId}/whitelist/`,
-      {
-        email,
-      }
-    );
-
-    return !!json.success;
-  }
-
-  /**
-   * Get which version of Wyvern exchange to use to create orders
-   * Simply return null in case API doesn't give us a good response
-   */
-  public async getOrderCreateWyvernExchangeAddress(): Promise<string | null> {
-    try {
-      const result = await this.get(`${ORDERBOOK_PATH}/exchange/`);
-      return result as string;
-    } catch (error) {
-      this.logger(
-        "Couldn't retrieve Wyvern exchange address for order creation"
-      );
-      return null;
-    }
   }
 
   /**

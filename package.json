@@ -33,18 +33,14 @@
   "types": "lib/index.d.ts",
   "dependencies": {
     "@opensea/seaport-js": "ssh+git@github.com:digital-landowners-society/seaport-js.git#96ea07495454e989717079f2173c3e74c6afcd46",
-    "ajv": "^8.11.0",
     "bignumber.js": "9.0.2",
     "ethereumjs-abi": "git+https://github.com/ProjectWyvern/ethereumjs-abi.git",
     "ethereumjs-util": "^5.2.0",
     "ethers": "^5.6.6",
     "fbemitter": "2.1.1",
     "isomorphic-unfetch": "^2.1.1",
-    "lodash": "^4.17.21",
     "query-string": "^6.11.1",
-    "web3": "1.7.0",
-    "wyvern-js": "git+https://github.com/ProjectOpenSea/wyvern-js.git#7429b1f2dd123f012cae1f3144a069e91ecd0682",
-    "wyvern-schemas": "git+https://github.com/ProjectOpenSea/wyvern-schemas.git#af1fc62dd58144b60487df690c77dcf8daa45669"
+    "web3": "1.7.0"
   },
   "devDependencies": {
     "@typechain/web3-v1": "^5.0.0",

@@ -1,7 +1,6 @@
 import { ItemType } from "@opensea/seaport-js/lib/constants";
 import BigNumber from "bignumber.js";
 import { ethers } from "ethers";
-import { WyvernProtocol } from "wyvern-js";
 import {
   INVERSE_BASIS_POINT,
   MAX_EXPIRATION_MONTHS,
@@ -27,10 +26,8 @@ import {
   SaleKind,
   Transaction,
   TxnCallback,
-  WyvernSchemaName,
+  SchemaName,
 } from "../types";
-
-export { WyvernProtocol };
 
 // OTHER
 
@@ -477,7 +474,7 @@ export const getMaxOrderExpirationTimestamp = () => {
   return Math.round(maxExpirationDate.getTime() / 1000);
 };
 
-export const getAssetItemType = (schemaName?: WyvernSchemaName) => {
+export const getAssetItemType = (schemaName?: SchemaName) => {
   switch (schemaName) {
     case "ERC20":
       return ItemType.ERC20;
