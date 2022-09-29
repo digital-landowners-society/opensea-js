@@ -1,6 +1,5 @@
 /* eslint-disable import/no-unused-modules */
 import BigNumber from "bignumber.js";
-import { AbiItem } from "web3-utils";
 import type { OrderV2 } from "./orders/types";
 
 interface WyvernOrder {
@@ -767,5 +766,3 @@ export interface OrderbookResponse {
 // Types related to Web3
 export type Web3Callback<T> = (err: Error | null, result: T) => void;
 export type TxnCallback = (result: boolean) => void;
-
-export type PartialReadonlyContractAbi = AbiItem[];
