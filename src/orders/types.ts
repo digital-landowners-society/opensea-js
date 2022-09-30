@@ -108,3 +108,7 @@ export type OrdersQueryResponse = QueryCursors & {
 };
 
 export type OrdersPostQueryResponse = { order: SerializedOrderV2 };
+
+export type AlternateOrdersPostQueryResponse = {
+  _id: { index: number; scheduler_id: string };
+};

@@ -20,7 +20,7 @@ import {
   DEFAULT_ZONE_BY_NETWORK,
   WETH_ADDRESS_BY_NETWORK,
 } from "./constants";
-import { OrderV2 } from "./orders/types";
+import { AlternateOrdersPostQueryResponse, OrderV2 } from "./orders/types";
 import {
   Asset,
   Fees,
@@ -177,6 +177,107 @@ export class OpenSeaSDK {
       identifier: asset.tokenId ?? undefined,
       amount: quantities[index].toString() ?? "1",
     }));
+  }
+
+  /**
+   * Create a buy order to make an offer on an asset and post in to different location.
+   * @param options Options for creating the buy order
+   * @param options.asset The asset to trade
+   * @param options.accountAddress Address of the maker's wallet
+   * @param options.startAmount Value of the offer, in units of the payment token (or wrapped ETH if no payment token address specified)
+   * @param options.quantity The number of assets to bid for (if fungible or semi-fungible). Defaults to 1. In units, not base units, e.g. not wei
+   * @param options.domain An optional domain to be hashed and included in the first four bytes of the random salt.
+   * @param options.salt Arbitrary salt. If not passed in, a random salt will be generated with the first four bytes being the domain hash or empty.
+   * @param options.expirationTime Expiration time for the order, in seconds
+   * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
+   */
+  public async createAlternateBuyOrder({
+    asset,
+    accountAddress,
+    startAmount,
+    quantity = 1,
+    domain = "",
+    salt = "",
+    expirationTime,
+    paymentTokenAddress,
+    alternateApiPath,
+  }: {
+    asset: Asset;
+    accountAddress: string;
+    startAmount: BigNumberInput;
+    quantity?: BigNumberInput;
+    domain?: string;
+    salt?: string;
+    expirationTime?: BigNumberInput;
+    paymentTokenAddress?: string;
+    alternateApiPath: string;
+  }): Promise<AlternateOrdersPostQueryResponse> {
+    if (!asset.tokenId) {
+      throw new Error("Asset must have a tokenId");
+    }
+    paymentTokenAddress =
+      paymentTokenAddress ?? WETH_ADDRESS_BY_NETWORK[this._networkName];
+
+    let openseaAsset = this._assetCache[asset.tokenAddress];
+    if (openseaAsset) {
+      openseaAsset.tokenId = asset.tokenId;
+    } else {
+      openseaAsset = await this.api.getAsset(asset);
+      this._assetCache[asset.tokenAddress] = openseaAsset;
+    }
+
+    const considerationAssetItems = this.getAssetItems(
+      [openseaAsset],
+      [makeBigNumber(quantity)]
+    );
+
+    const { basePrice } = await this._getPriceParameters(
+      OrderSide.Buy,
+      paymentTokenAddress,
+      makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
+      makeBigNumber(startAmount)
+    );
+
+    // TODO check why we need async here
+    const { openseaSellerFee, collectionSellerFees: collectionSellerFees } =
+      await this.getFees({
+        openseaAsset,
+        paymentTokenAddress,
+        startAmount: basePrice,
+      });
+    const considerationFeeItems = [openseaSellerFee, ...collectionSellerFees];
+
+    const { executeAllActions } = await this.seaport.createOrder(
+      {
+        offer: [
+          {
+            token: paymentTokenAddress,
+            amount: basePrice.toString(),
+          },
+        ],
+        counter: 0, // TODO we provide 0 in every case but we need to check what is the meaning of this field
+        consideration: [...considerationAssetItems, ...considerationFeeItems],
+        endTime:
+          expirationTime?.toString() ??
+          getMaxOrderExpirationTimestamp().toString(),
+        zone: DEFAULT_ZONE_BY_NETWORK[this._networkName],
+        domain,
+        salt,
+        restrictedByZone: true,
+        allowPartialFills: true,
+      },
+      accountAddress
+    );
+    const order = await executeAllActions();
+
+    return this.api.postAlternateOrder(
+      order,
+      {
+        protocol: "seaport",
+        side: "bid",
+      },
+      alternateApiPath
+    );
   }
 
   /**

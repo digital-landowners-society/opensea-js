@@ -2,6 +2,7 @@ import "isomorphic-unfetch";
 import * as QueryString from "query-string";
 import { API_BASE_MAINNET, API_BASE_TESTNET, API_PATH } from "./constants";
 import {
+  AlternateOrdersPostQueryResponse,
   OrderAPIOptions,
   OrdersPostQueryResponse,
   OrdersQueryOptions,
@@ -49,6 +50,7 @@ export class OpenSeaAPI {
   private apiKey: string | undefined;
   private networkName: Network;
   private retryDelay = 3000;
+  private postApiBaseUrl: string | undefined;
 
   /**
    * Create an instance of the OpenSea API
@@ -68,7 +70,7 @@ export class OpenSeaAPI {
         this.apiBaseUrl = config.apiBaseUrl || API_BASE_MAINNET;
         break;
     }
-
+    this.postApiBaseUrl = config.postApiBaseUrl || this.apiBaseUrl;
     // Debugging: default to nothing
     this.logger = logger || ((arg: string) => arg);
   }
@@ -131,13 +133,41 @@ export class OpenSeaAPI {
   /**
    * Send an order to be posted. Throws when the order is invalid.
    */
+  public async postAlternateOrder(
+    order: ProtocolData,
+    apiOptions: OrderAPIOptions,
+    alternateApiPath: string,
+    { retries = 2 }: { retries?: number } = {}
+  ): Promise<AlternateOrdersPostQueryResponse> {
+    let response: AlternateOrdersPostQueryResponse;
+    const { protocol = "seaport", side } = apiOptions;
+    try {
+      const apiPath =
+        this.apiBaseUrl + getOrdersAPIPath(this.networkName, protocol, side);
+      const data = { data: order, apiPath };
+      response = await this.alternatePost<AlternateOrdersPostQueryResponse>(
+        alternateApiPath,
+        data
+      );
+    } catch (error) {
+      _throwOrContinue(error, retries);
+      await delay(this.retryDelay);
+      return this.postAlternateOrder(order, apiOptions, alternateApiPath, {
+        retries: retries - 1,
+      });
+    }
+    return response;
+  }
+
+  /**
+   * Send an order to be posted. Throws when the order is invalid.
+   */
   public async postOrder(
     order: ProtocolData,
     apiOptions: OrderAPIOptions,
     { retries = 2 }: { retries?: number } = {}
   ): Promise<OrderV2> {
     let response: OrdersPostQueryResponse;
-    // TODO: Validate apiOptions. Avoid API calls that will definitely fail
     const { protocol = "seaport", side } = apiOptions;
     try {
       response = await this.post<OrdersPostQueryResponse>(
@@ -299,6 +329,32 @@ export class OpenSeaAPI {
    * @param opts RequestInit opts, similar to Fetch API. If it contains
    *  a body, it won't be stringified.
    */
+  public async alternatePost<T>(
+    apiPath: string,
+    body?: object,
+    opts: RequestInit = {}
+  ): Promise<T> {
+    const fetchOpts = {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      ...opts,
+    };
+
+    const response = await this._fetch(apiPath, fetchOpts, this.postApiBaseUrl);
+    return response.json();
+  }
+
+  /**
+   * POST JSON data to API, sending auth token in headers
+   * @param apiPath Path to URL endpoint under API
+   * @param body Data to send. Will be JSON.stringified
+   * @param opts RequestInit opts, similar to Fetch API. If it contains
+   *  a body, it won't be stringified.
+   */
   public async post<T>(
     apiPath: string,
     body?: object,
@@ -336,9 +392,14 @@ export class OpenSeaAPI {
    * Get from an API Endpoint, sending auth token in headers
    * @param apiPath Path to URL endpoint under API
    * @param opts RequestInit opts, similar to Fetch API
+   * @param alternateApiPath base URL
    */
-  private async _fetch(apiPath: string, opts: RequestInit = {}) {
-    const apiBase = this.apiBaseUrl;
+  private async _fetch(
+    apiPath: string,
+    opts: RequestInit = {},
+    alternateApiPath?: string
+  ) {
+    const apiBase = alternateApiPath || this.apiBaseUrl;
     const apiKey = this.apiKey;
     const finalUrl = apiBase + apiPath;
     const finalOpts = {

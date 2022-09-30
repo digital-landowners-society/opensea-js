@@ -142,6 +142,7 @@ export interface OpenSeaAPIConfig {
   networkName?: Network;
   apiKey?: string;
   apiBaseUrl?: string;
+  postApiBaseUrl?: string;
   useReadOnlyProvider?: boolean;
   // Sent to WyvernJS
   gasPrice?: BigNumber;
