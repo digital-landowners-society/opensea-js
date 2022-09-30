@@ -4,6 +4,7 @@ import {
   ConsiderationInputItem,
   CreateInputItem,
   OrderComponents,
+  OrderWithCounter,
   Signer,
 } from "@opensea/seaport-js/lib/types";
 import { BigNumber } from "bignumber.js";
@@ -210,6 +211,51 @@ export class OpenSeaSDK {
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
   }): Promise<OrderV2> {
+    const order = await this.generateBuyOrder({
+      asset,
+      accountAddress,
+      startAmount,
+      quantity,
+      domain,
+      salt,
+      expirationTime,
+      paymentTokenAddress,
+    });
+
+    return this.api.postOrder(order, { protocol: "seaport", side: "bid" });
+  }
+
+  /**
+   * Create a buy order to make an offer on an asset.
+   * @param options Options for creating the buy order
+   * @param options.asset The asset to trade
+   * @param options.accountAddress Address of the maker's wallet
+   * @param options.startAmount Value of the offer, in units of the payment token (or wrapped ETH if no payment token address specified)
+   * @param options.quantity The number of assets to bid for (if fungible or semi-fungible). Defaults to 1. In units, not base units, e.g. not wei
+   * @param options.domain An optional domain to be hashed and included in the first four bytes of the random salt.
+   * @param options.salt Arbitrary salt. If not passed in, a random salt will be generated with the first four bytes being the domain hash or empty.
+   * @param options.expirationTime Expiration time for the order, in seconds
+   * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
+   */
+  public async generateBuyOrder({
+    asset,
+    accountAddress,
+    startAmount,
+    quantity = 1,
+    domain = "",
+    salt = "",
+    expirationTime,
+    paymentTokenAddress,
+  }: {
+    asset: Asset;
+    accountAddress: string;
+    startAmount: BigNumberInput;
+    quantity?: BigNumberInput;
+    domain?: string;
+    salt?: string;
+    expirationTime?: BigNumberInput;
+    paymentTokenAddress?: string;
+  }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
     }
@@ -266,9 +312,8 @@ export class OpenSeaSDK {
       },
       accountAddress
     );
-    const order = await executeAllActions();
 
-    return this.api.postOrder(order, { protocol: "seaport", side: "bid" });
+    return await executeAllActions();
   }
 
   /**
