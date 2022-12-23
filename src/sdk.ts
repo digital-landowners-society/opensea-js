@@ -382,8 +382,10 @@ export class OpenSeaSDK {
         asset_contract: { address: asset.tokenAddress, schema_name: "ERC721" },
         collection: {
           fees: {
-            seller_fees: { [ownerAddress || ""]: sellerFees },
-            opensea_fees: { "0x0000a26b00c1f0df003000390027140000faa719": 250 },
+            seller_fees: {
+              [ownerAddress || OPENSEA_FEE_RECIPIENT]: sellerFees,
+            },
+            opensea_fees: { OPENSEA_FEE_RECIPIENT: 250 },
           },
         },
       };
