@@ -42,6 +42,7 @@ import {
   BigNumberInput,
   getAddressAfterRemappingSharedStorefrontAddressToLazyMintAdapterAddress,
   feesToBasisPoints,
+  assetFromJSON,
 } from "./utils";
 
 export class OpenSeaSDK {
@@ -339,6 +340,8 @@ export class OpenSeaSDK {
    * @param options.buyerAddress Optional address that's allowed to purchase this item. If specified, no other address will be able to take the order, unless its value is the null address.
    */
   public async generateSellOrder({
+    chain = Chain.Ethereum,
+    sellerFees = 500,
     asset,
     accountAddress,
     startAmount,
@@ -351,6 +354,8 @@ export class OpenSeaSDK {
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
   }: {
+    chain?: Chain;
+    sellerFees?: number;
     asset: Asset;
     accountAddress: string;
     startAmount: BigNumberInput;
@@ -366,8 +371,22 @@ export class OpenSeaSDK {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
     }
-
-    const openseaAsset = await this.api.getAsset(asset);
+    let openseaAsset;
+    if (chain === Chain.Ethereum) {
+      openseaAsset = await this.api.getAsset(asset);
+    } else {
+      openseaAsset = assetFromJSON({
+        token_id: asset.tokenId,
+        token_address: asset.tokenAddress,
+        schema_name: "ERC721",
+        collection: {
+          fees: {
+            seller_fees: { a: sellerFees },
+            opensea_fees: { b: 250 },
+          },
+        },
+      });
+    }
     const offerAssetItems = this.getAssetItems(
       [openseaAsset],
       [makeBigNumber(quantity)]
@@ -437,6 +456,7 @@ export class OpenSeaSDK {
    */
   public async createSellOrder({
     chain = Chain.Ethereum,
+    sellerFees = 500,
     asset,
     accountAddress,
     startAmount,
@@ -449,7 +469,8 @@ export class OpenSeaSDK {
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
   }: {
-    chain: Chain;
+    chain?: Chain;
+    sellerFees?: number;
     asset: Asset;
     accountAddress: string;
     startAmount: BigNumberInput;
@@ -463,6 +484,8 @@ export class OpenSeaSDK {
     buyerAddress?: string;
   }): Promise<OrderV2> {
     const order = await this.generateSellOrder({
+      chain,
+      sellerFees,
       asset,
       accountAddress,
       startAmount,
