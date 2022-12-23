@@ -30,12 +30,10 @@ export const CONDUIT_KEYS_TO_CONDUIT = {
 
 export const WETH_ADDRESS_BY_NETWORK = {
   [Network.Main]: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-  [Network.Rinkeby]: "0xc778417e063141139fce010982780140aa0cd5ab",
   [Network.Goerli]: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
 } as const;
 
 export const DEFAULT_ZONE_BY_NETWORK = {
   [Network.Main]: "0x004c00500000ad104d7dbd00e3ae0a5c00560c00",
-  [Network.Rinkeby]: "0x00000000e88fe2628ebc5da81d2b3cead633e89e",
   [Network.Goerli]: "0x0000000000000000000000000000000000000000",
 } as const;
