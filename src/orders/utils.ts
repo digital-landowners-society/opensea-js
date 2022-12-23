@@ -1,4 +1,4 @@
-import { Network } from "../types";
+import { Chain } from "../types";
 import { accountFromJSON, assetBundleFromJSON } from "../utils";
 import {
   OrderProtocol,
@@ -8,23 +8,16 @@ import {
   SerializedOrderV2,
 } from "./types";
 
-const NETWORK_TO_CHAIN = {
-  [Network.Main]: "ethereum",
-  [Network.Rinkeby]: "rinkeby",
-  [Network.Goerli]: "goerli",
-};
-
 export const getOrdersAPIPath = (
-  network: Network,
+  chain: Chain,
   protocol: OrderProtocol,
   side: OrderSide
 ) => {
-  const chain = NETWORK_TO_CHAIN[network];
   const sidePath = side === "ask" ? "listings" : "offers";
   return `/v2/orders/${chain}/${protocol}/${sidePath}`;
 };
 
-type OrdersQueryPathOptions = "protocol" | "side";
+type OrdersQueryPathOptions = "protocol" | "side" | "chain";
 export const serializeOrdersQueryOptions = (
   options: Omit<OrdersQueryOptions, OrdersQueryPathOptions>
 ) => {

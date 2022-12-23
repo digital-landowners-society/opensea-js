@@ -48,13 +48,22 @@ interface ECSignature {
   s: string;
 }
 
+enum Chain {
+  Ethereum = "ethereum",
+  Goerli = "goerli",
+  Polygon = "matic",
+  Arbitrum = "arbitrum",
+  Avalanche = "avalanche",
+  Klaytn = "klaytn",
+  Optimism = "optimism",
+}
+
 enum Network {
   Main = "main",
-  Rinkeby = "rinkeby",
   Goerli = "goerli",
 }
 
-export { HowToCall, Network };
+export { HowToCall, Network, Chain };
 export type { ECSignature };
 
 /**

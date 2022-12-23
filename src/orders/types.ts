@@ -1,5 +1,5 @@
 import { OrderWithCounter } from "@opensea/seaport-js/lib/types";
-import { OpenSeaAccount, OpenSeaAssetBundle } from "../types";
+import { Chain, OpenSeaAccount, OpenSeaAssetBundle } from "../types";
 
 // Protocol data
 type OrderProtocolToProtocolData = {
@@ -47,6 +47,7 @@ type OrderByDirection = "asc" | "desc";
 export type OrderAPIOptions = {
   protocol?: OrderProtocol;
   side: OrderSide;
+  chain: Chain;
 };
 
 export type OrdersQueryOptions = OrderAPIOptions & {

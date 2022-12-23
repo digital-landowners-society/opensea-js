@@ -24,6 +24,7 @@ import {
 import { OrderV2 } from "./orders/types";
 import {
   Asset,
+  Chain,
   Fees,
   Network,
   OpenSeaAPIConfig,
@@ -193,6 +194,7 @@ export class OpenSeaSDK {
    * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
    */
   public async createBuyOrder({
+    chain = Chain.Ethereum,
     asset,
     accountAddress,
     startAmount,
@@ -202,6 +204,7 @@ export class OpenSeaSDK {
     expirationTime,
     paymentTokenAddress,
   }: {
+    chain: Chain;
     asset: Asset;
     accountAddress: string;
     startAmount: BigNumberInput;
@@ -222,7 +225,11 @@ export class OpenSeaSDK {
       paymentTokenAddress,
     });
 
-    return this.api.postOrder(order, { protocol: "seaport", side: "bid" });
+    return this.api.postOrder(order, {
+      protocol: "seaport",
+      side: "bid",
+      chain,
+    });
   }
 
   /**
@@ -429,6 +436,7 @@ export class OpenSeaSDK {
    * @param options.buyerAddress Optional address that's allowed to purchase this item. If specified, no other address will be able to take the order, unless its value is the null address.
    */
   public async createSellOrder({
+    chain = Chain.Ethereum,
     asset,
     accountAddress,
     startAmount,
@@ -441,6 +449,7 @@ export class OpenSeaSDK {
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
   }: {
+    chain: Chain;
     asset: Asset;
     accountAddress: string;
     startAmount: BigNumberInput;
@@ -467,7 +476,11 @@ export class OpenSeaSDK {
       buyerAddress,
     });
 
-    return this.api.postOrder(order, { protocol: "seaport", side: "ask" });
+    return this.api.postOrder(order, {
+      protocol: "seaport",
+      side: "ask",
+      chain,
+    });
   }
 
   /**

@@ -16,6 +16,7 @@ import {
   deserializeOrder,
 } from "./orders/utils";
 import {
+  Chain,
   Network,
   OpenSeaAPIConfig,
   OpenSeaAsset,
@@ -77,6 +78,7 @@ export class OpenSeaAPI {
    * Gets an order from API based on query options. Throws when no order is found.
    */
   public async getOrder({
+    chain = Chain.Ethereum,
     side,
     protocol = "seaport",
     orderDirection = "desc",
@@ -84,7 +86,7 @@ export class OpenSeaAPI {
     ...restOptions
   }: Omit<OrdersQueryOptions, "limit">): Promise<OrderV2> {
     const { orders } = await this.get<OrdersQueryResponse>(
-      getOrdersAPIPath(this.networkName, protocol, side),
+      getOrdersAPIPath(chain, protocol, side),
       serializeOrdersQueryOptions({
         limit: 1,
         orderBy,
@@ -103,6 +105,7 @@ export class OpenSeaAPI {
    * with next and previous cursors.
    */
   public async getOrders({
+    chain = Chain.Ethereum,
     side,
     protocol = "seaport",
     orderDirection = "desc",
@@ -114,7 +117,7 @@ export class OpenSeaAPI {
     }
   > {
     const response = await this.get<OrdersQueryResponse>(
-      getOrdersAPIPath(this.networkName, protocol, side),
+      getOrdersAPIPath(chain, protocol, side),
       serializeOrdersQueryOptions({
         limit: this.pageSize,
         orderBy,
@@ -137,11 +140,10 @@ export class OpenSeaAPI {
     { retries = 2 }: { retries?: number } = {}
   ): Promise<OrderV2> {
     let response: OrdersPostQueryResponse;
-    // TODO: Validate apiOptions. Avoid API calls that will definitely fail
-    const { protocol = "seaport", side } = apiOptions;
+    const { protocol = "seaport", side, chain = Chain.Ethereum } = apiOptions;
     try {
       response = await this.post<OrdersPostQueryResponse>(
-        getOrdersAPIPath(this.networkName, protocol, side),
+        getOrdersAPIPath(chain, protocol, side),
         order
       );
     } catch (error) {
