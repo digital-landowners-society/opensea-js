@@ -400,7 +400,10 @@ export class OpenSeaSDK {
       paymentTokenAddress,
       makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
       makeBigNumber(startAmount),
-      endAmount !== undefined ? makeBigNumber(endAmount) : undefined
+      endAmount !== undefined ? makeBigNumber(endAmount) : undefined,
+      undefined,
+      undefined,
+      chain
     );
 
     const {
