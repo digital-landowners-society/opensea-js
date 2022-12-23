@@ -368,7 +368,7 @@ export class OpenSeaSDK {
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
     buyerAddress?: string;
-    ownerAddress: string;
+    ownerAddress?: string;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
@@ -382,7 +382,7 @@ export class OpenSeaSDK {
         asset_contract: { address: asset.tokenAddress, schema_name: "ERC721" },
         collection: {
           fees: {
-            seller_fees: { [ownerAddress]: sellerFees },
+            seller_fees: { [ownerAddress || ""]: sellerFees },
             opensea_fees: { "0x0000a26b00c1f0df003000390027140000faa719": 250 },
           },
         },
@@ -470,6 +470,7 @@ export class OpenSeaSDK {
     expirationTime,
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
+    ownerAddress,
   }: {
     chain?: Chain;
     sellerFees?: number;
@@ -484,6 +485,7 @@ export class OpenSeaSDK {
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
     buyerAddress?: string;
+    ownerAddress?: string;
   }): Promise<OrderV2> {
     const order = await this.generateSellOrder({
       chain,
@@ -499,6 +501,7 @@ export class OpenSeaSDK {
       expirationTime,
       paymentTokenAddress,
       buyerAddress,
+      ownerAddress,
     });
 
     return this.api.postOrder(order, {
