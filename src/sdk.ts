@@ -354,7 +354,6 @@ export class OpenSeaSDK {
     expirationTime,
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
-    ownerAddress,
   }: {
     chain?: Chain;
     sellerFees?: number;
@@ -369,7 +368,6 @@ export class OpenSeaSDK {
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
     buyerAddress?: string;
-    ownerAddress?: string;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
@@ -384,7 +382,7 @@ export class OpenSeaSDK {
         collection: {
           fees: {
             seller_fees: {
-              [ownerAddress || OPENSEA_FEE_RECIPIENT]: sellerFees,
+              [accountAddress]: sellerFees,
             },
             opensea_fees: { OPENSEA_FEE_RECIPIENT: 250 },
           },
@@ -473,7 +471,6 @@ export class OpenSeaSDK {
     expirationTime,
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
-    ownerAddress,
   }: {
     chain?: Chain;
     sellerFees?: number;
@@ -488,7 +485,6 @@ export class OpenSeaSDK {
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
     buyerAddress?: string;
-    ownerAddress?: string;
   }): Promise<OrderV2> {
     const order = await this.generateSellOrder({
       chain,
@@ -504,7 +500,6 @@ export class OpenSeaSDK {
       expirationTime,
       paymentTokenAddress,
       buyerAddress,
-      ownerAddress,
     });
 
     return this.api.postOrder(order, {
