@@ -43,6 +43,7 @@ import {
   getAddressAfterRemappingSharedStorefrontAddressToLazyMintAdapterAddress,
   feesToBasisPoints,
   assetFromJSON,
+  tokenFromJSON,
 } from "./utils";
 
 export class OpenSeaSDK {
@@ -643,19 +644,44 @@ export class OpenSeaSDK {
     startAmount: BigNumber,
     endAmount?: BigNumber,
     waitingForBestCounterOrder = false,
-    englishAuctionReservePrice?: BigNumber
+    englishAuctionReservePrice?: BigNumber,
+    chain: Chain = Chain.Ethereum
   ) {
     const priceDiff =
       endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
     const paymentToken = tokenAddress.toLowerCase();
     const isEther = tokenAddress == NULL_ADDRESS;
-    let token = this._tokensCache[paymentToken];
-    if (!token) {
-      const { tokens } = await this.api.getPaymentTokens({
-        address: paymentToken,
-      });
-      token = tokens[0];
-      this._tokensCache[paymentToken] = token;
+    let token;
+    if (chain === Chain.Ethereum) {
+      token = this._tokensCache[paymentToken];
+      if (!token) {
+        const { tokens } = await this.api.getPaymentTokens({
+          address: paymentToken,
+        });
+        token = tokens[0];
+        this._tokensCache[paymentToken] = token;
+      }
+    } else {
+      switch (tokenAddress) {
+        case "0x2791bca1f2de4661ed88a30c99a7a9449aa84174":
+          token = tokenFromJSON({
+            name: "USD Coin (PoS)",
+            symbol: "USDC",
+            decimals: 6,
+            address: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+          });
+          break;
+        case "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619":
+          token = tokenFromJSON({
+            name: "Wrapped Ether",
+            symbol: "WETH",
+            decimals: 18,
+            address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+          });
+          break;
+        default:
+          throw new Error("Unsupported token");
+      }
     }
     // Validation
     if (startAmount.isNaN() || startAmount.lt(0)) {
