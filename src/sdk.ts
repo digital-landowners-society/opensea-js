@@ -377,7 +377,7 @@ export class OpenSeaSDK {
     } else {
       openseaAsset = assetFromJSON({
         token_id: asset.tokenId,
-        token_address: asset.tokenAddress,
+        asset_contract: { address: asset.tokenAddress },
         schema_name: "ERC721",
         collection: {
           fees: {
