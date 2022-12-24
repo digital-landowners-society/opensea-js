@@ -353,6 +353,7 @@ export class OpenSeaSDK {
     sellerFees = 500,
     schemaName = "ERC721",
     paymentTokenData,
+    sellerFeeAddress,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -367,6 +368,7 @@ export class OpenSeaSDK {
     sellerFees?: number;
     schemaName?: string;
     paymentTokenData?: any;
+    sellerFeeAddress: string;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
@@ -380,7 +382,7 @@ export class OpenSeaSDK {
       collection: {
         fees: {
           seller_fees: {
-            [accountAddress]: sellerFees,
+            [sellerFeeAddress]: sellerFees,
           },
           opensea_fees: { [OPENSEA_FEE_RECIPIENT]: 250 },
         },
@@ -472,6 +474,7 @@ export class OpenSeaSDK {
     buyerAddress,
     sellerFees = 500,
     schemaName = "ERC721",
+    sellerFeeAddress,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -486,6 +489,7 @@ export class OpenSeaSDK {
     buyerAddress?: string;
     sellerFees?: number;
     schemaName?: string;
+    sellerFeeAddress: string;
   }): Promise<OrderV2> {
     const order = await this.generateSellOrder({
       asset,
@@ -501,6 +505,7 @@ export class OpenSeaSDK {
       buyerAddress,
       sellerFees,
       schemaName,
+      sellerFeeAddress,
     });
 
     return this.api.postOrder(order, {
