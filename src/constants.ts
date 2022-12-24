@@ -1,4 +1,4 @@
-import { Network } from "./types";
+import { Network, Chain } from "./types";
 
 export const NULL_ADDRESS = "0x0000000000000000000000000000000000000000";
 export const NULL_BLOCK_HASH =
@@ -33,7 +33,14 @@ export const WETH_ADDRESS_BY_NETWORK = {
   [Network.Goerli]: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
 } as const;
 
-export const DEFAULT_ZONE_BY_NETWORK = {
-  [Network.Main]: "0x004c00500000ad104d7dbd00e3ae0a5c00560c00",
-  [Network.Goerli]: "0x0000000000000000000000000000000000000000",
+export const WETH_ADDRESS_BY_CHAIN = {
+  [Chain.Ethereum]: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  [Chain.Polygon]: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+  [Chain.Goerli]: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
+} as const;
+
+export const DEFAULT_ZONE_BY_CHAIN = {
+  [Chain.Ethereum]: "0x004c00500000ad104d7dbd00e3ae0a5c00560c00",
+  [Chain.Polygon]: "0x0000000000000000000000000000000000000000",
+  [Chain.Goerli]: "0x0000000000000000000000000000000000000000",
 } as const;

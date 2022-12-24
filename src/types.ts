@@ -52,10 +52,6 @@ enum Chain {
   Ethereum = "ethereum",
   Goerli = "goerli",
   Polygon = "matic",
-  Arbitrum = "arbitrum",
-  Avalanche = "avalanche",
-  Klaytn = "klaytn",
-  Optimism = "optimism",
 }
 
 enum Network {
@@ -149,6 +145,7 @@ export interface EventData {
  */
 export interface OpenSeaAPIConfig {
   networkName?: Network;
+  chain?: Chain;
   apiKey?: string;
   apiBaseUrl?: string;
   useReadOnlyProvider?: boolean;

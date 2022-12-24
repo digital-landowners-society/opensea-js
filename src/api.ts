@@ -47,7 +47,8 @@ export class OpenSeaAPI {
    */
   public logger: (arg: string) => void;
 
-  private apiKey: string | undefined;
+  private readonly apiKey: string | undefined;
+  private readonly chain: Chain;
   private networkName: Network;
   private retryDelay = 3000;
 
@@ -58,6 +59,7 @@ export class OpenSeaAPI {
    */
   constructor(config: OpenSeaAPIConfig, logger?: (arg: string) => void) {
     this.apiKey = config.apiKey;
+    this.chain = config.chain || Chain.Ethereum;
     this.networkName = config.networkName ?? Network.Main;
 
     switch (config.networkName) {
@@ -78,7 +80,6 @@ export class OpenSeaAPI {
    * Gets an order from API based on query options. Throws when no order is found.
    */
   public async getOrder({
-    chain = Chain.Ethereum,
     side,
     protocol = "seaport",
     orderDirection = "desc",
@@ -86,7 +87,7 @@ export class OpenSeaAPI {
     ...restOptions
   }: Omit<OrdersQueryOptions, "limit">): Promise<OrderV2> {
     const { orders } = await this.get<OrdersQueryResponse>(
-      getOrdersAPIPath(chain, protocol, side),
+      getOrdersAPIPath(this.chain, protocol, side),
       serializeOrdersQueryOptions({
         limit: 1,
         orderBy,
@@ -105,7 +106,6 @@ export class OpenSeaAPI {
    * with next and previous cursors.
    */
   public async getOrders({
-    chain = Chain.Ethereum,
     side,
     protocol = "seaport",
     orderDirection = "desc",
@@ -117,7 +117,7 @@ export class OpenSeaAPI {
     }
   > {
     const response = await this.get<OrdersQueryResponse>(
-      getOrdersAPIPath(chain, protocol, side),
+      getOrdersAPIPath(this.chain, protocol, side),
       serializeOrdersQueryOptions({
         limit: this.pageSize,
         orderBy,

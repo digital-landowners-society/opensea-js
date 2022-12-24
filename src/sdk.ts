@@ -18,8 +18,8 @@ import {
   NULL_BLOCK_HASH,
   CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
   OPENSEA_FEE_RECIPIENT,
-  DEFAULT_ZONE_BY_NETWORK,
-  WETH_ADDRESS_BY_NETWORK,
+  DEFAULT_ZONE_BY_CHAIN,
+  WETH_ADDRESS_BY_CHAIN,
 } from "./constants";
 import { OrderV2 } from "./orders/types";
 import {
@@ -56,7 +56,7 @@ export class OpenSeaSDK {
   // API instance on this seaport
   public readonly api: OpenSeaAPI;
 
-  private _networkName: Network;
+  private readonly chain: Chain;
   private _tokensCache: { [address: string]: OpenSeaFungibleToken } = {};
   private _assetCache: { [tokenAddress: string]: OpenSeaAsset } = {};
 
@@ -77,8 +77,7 @@ export class OpenSeaSDK {
     // API config
     apiConfig.networkName = apiConfig.networkName || Network.Main;
     this.api = new OpenSeaAPI(apiConfig);
-
-    this._networkName = apiConfig.networkName;
+    this.chain = apiConfig.chain || Chain.Ethereum;
 
     // Ethers Config
     this.ethersProvider = signer.provider as ethers.providers.Provider;
@@ -196,7 +195,6 @@ export class OpenSeaSDK {
    * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
    */
   public async createBuyOrder({
-    chain = Chain.Ethereum,
     asset,
     accountAddress,
     startAmount,
@@ -206,7 +204,6 @@ export class OpenSeaSDK {
     expirationTime,
     paymentTokenAddress,
   }: {
-    chain: Chain;
     asset: Asset;
     accountAddress: string;
     startAmount: BigNumberInput;
@@ -230,7 +227,7 @@ export class OpenSeaSDK {
     return this.api.postOrder(order, {
       protocol: "seaport",
       side: "bid",
-      chain,
+      chain: this.chain,
     });
   }
 
@@ -269,7 +266,7 @@ export class OpenSeaSDK {
       throw new Error("Asset must have a tokenId");
     }
     paymentTokenAddress =
-      paymentTokenAddress ?? WETH_ADDRESS_BY_NETWORK[this._networkName];
+      paymentTokenAddress ?? WETH_ADDRESS_BY_CHAIN[this.chain];
 
     let openseaAsset = this._assetCache[asset.tokenAddress];
     if (openseaAsset) {
@@ -313,7 +310,7 @@ export class OpenSeaSDK {
         endTime:
           expirationTime?.toString() ??
           getMaxOrderExpirationTimestamp().toString(),
-        zone: DEFAULT_ZONE_BY_NETWORK[this._networkName],
+        zone: DEFAULT_ZONE_BY_CHAIN[this.chain],
         domain,
         salt,
         restrictedByZone: true,
@@ -341,7 +338,6 @@ export class OpenSeaSDK {
    * @param options.buyerAddress Optional address that's allowed to purchase this item. If specified, no other address will be able to take the order, unless its value is the null address.
    */
   public async generateSellOrder({
-    chain = Chain.Ethereum,
     sellerFees = 500,
     asset,
     accountAddress,
@@ -355,7 +351,6 @@ export class OpenSeaSDK {
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
   }: {
-    chain?: Chain;
     sellerFees?: number;
     asset: Asset;
     accountAddress: string;
@@ -373,7 +368,7 @@ export class OpenSeaSDK {
       throw new Error("Asset must have a tokenId");
     }
     let openseaAsset;
-    if (chain === Chain.Ethereum) {
+    if (this.chain === Chain.Ethereum) {
       openseaAsset = await this.api.getAsset(asset);
     } else {
       const assetData = {
@@ -400,10 +395,7 @@ export class OpenSeaSDK {
       paymentTokenAddress,
       makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
       makeBigNumber(startAmount),
-      endAmount !== undefined ? makeBigNumber(endAmount) : undefined,
-      undefined,
-      undefined,
-      chain
+      endAmount !== undefined ? makeBigNumber(endAmount) : undefined
     );
 
     const {
@@ -434,7 +426,7 @@ export class OpenSeaSDK {
         endTime:
           expirationTime?.toString() ??
           getMaxOrderExpirationTimestamp().toString(),
-        zone: DEFAULT_ZONE_BY_NETWORK[this._networkName],
+        zone: DEFAULT_ZONE_BY_CHAIN[this.chain],
         domain,
         salt,
         restrictedByZone: true,
@@ -461,7 +453,6 @@ export class OpenSeaSDK {
    * @param options.buyerAddress Optional address that's allowed to purchase this item. If specified, no other address will be able to take the order, unless its value is the null address.
    */
   public async createSellOrder({
-    chain = Chain.Ethereum,
     sellerFees = 500,
     asset,
     accountAddress,
@@ -475,7 +466,6 @@ export class OpenSeaSDK {
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
   }: {
-    chain?: Chain;
     sellerFees?: number;
     asset: Asset;
     accountAddress: string;
@@ -490,7 +480,6 @@ export class OpenSeaSDK {
     buyerAddress?: string;
   }): Promise<OrderV2> {
     const order = await this.generateSellOrder({
-      chain,
       sellerFees,
       asset,
       accountAddress,
@@ -508,7 +497,7 @@ export class OpenSeaSDK {
     return this.api.postOrder(order, {
       protocol: "seaport",
       side: "ask",
-      chain,
+      chain: this.chain,
     });
   }
 
@@ -642,15 +631,14 @@ export class OpenSeaSDK {
     startAmount: BigNumber,
     endAmount?: BigNumber,
     waitingForBestCounterOrder = false,
-    englishAuctionReservePrice?: BigNumber,
-    chain: Chain = Chain.Ethereum
+    englishAuctionReservePrice?: BigNumber
   ) {
     const priceDiff =
       endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
     const paymentToken = tokenAddress.toLowerCase();
     const isEther = tokenAddress == NULL_ADDRESS;
     let token;
-    if (chain === Chain.Ethereum) {
+    if (this.chain === Chain.Ethereum) {
       token = this._tokensCache[paymentToken];
       if (!token) {
         const { tokens } = await this.api.getPaymentTokens({
