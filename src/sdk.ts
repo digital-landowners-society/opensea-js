@@ -252,6 +252,7 @@ export class OpenSeaSDK {
     salt = "",
     expirationTime,
     paymentTokenAddress,
+    paymentTokenData,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -261,6 +262,7 @@ export class OpenSeaSDK {
     salt?: string;
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
+    paymentTokenData?: object;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
@@ -285,7 +287,9 @@ export class OpenSeaSDK {
       OrderSide.Buy,
       paymentTokenAddress,
       makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
-      makeBigNumber(startAmount)
+      makeBigNumber(startAmount),
+      makeBigNumber(startAmount),
+      paymentTokenData
     );
 
     // TODO check why we need async here
@@ -338,7 +342,6 @@ export class OpenSeaSDK {
    * @param options.buyerAddress Optional address that's allowed to purchase this item. If specified, no other address will be able to take the order, unless its value is the null address.
    */
   public async generateSellOrder({
-    sellerFees = 500,
     asset,
     accountAddress,
     startAmount,
@@ -350,8 +353,10 @@ export class OpenSeaSDK {
     expirationTime,
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
+    sellerFees = 500,
+    schemaName = "ERC721",
+    paymentTokenData,
   }: {
-    sellerFees?: number;
     asset: Asset;
     accountAddress: string;
     startAmount: BigNumberInput;
@@ -363,28 +368,29 @@ export class OpenSeaSDK {
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
     buyerAddress?: string;
+    sellerFees?: number;
+    schemaName?: string;
+    paymentTokenData?: object;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
     }
-    let openseaAsset;
-    if (this.chain === Chain.Ethereum) {
-      openseaAsset = await this.api.getAsset(asset);
-    } else {
-      const assetData = {
-        token_id: asset.tokenId,
-        asset_contract: { address: asset.tokenAddress, schema_name: "ERC721" },
-        collection: {
-          fees: {
-            seller_fees: {
-              [accountAddress]: sellerFees,
-            },
-            opensea_fees: { OPENSEA_FEE_RECIPIENT: 250 },
+    const assetData = {
+      token_id: asset.tokenId,
+      asset_contract: {
+        address: asset.tokenAddress,
+        schema_name: schemaName,
+      },
+      collection: {
+        fees: {
+          seller_fees: {
+            [accountAddress]: sellerFees,
           },
+          opensea_fees: { OPENSEA_FEE_RECIPIENT: 250 },
         },
-      };
-      openseaAsset = assetFromJSON(assetData);
-    }
+      },
+    };
+    const openseaAsset = assetFromJSON(assetData);
     const offerAssetItems = this.getAssetItems(
       [openseaAsset],
       [makeBigNumber(quantity)]
@@ -395,7 +401,8 @@ export class OpenSeaSDK {
       paymentTokenAddress,
       makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
       makeBigNumber(startAmount),
-      endAmount !== undefined ? makeBigNumber(endAmount) : undefined
+      endAmount !== undefined ? makeBigNumber(endAmount) : undefined,
+      paymentTokenData
     );
 
     const {
@@ -453,7 +460,6 @@ export class OpenSeaSDK {
    * @param options.buyerAddress Optional address that's allowed to purchase this item. If specified, no other address will be able to take the order, unless its value is the null address.
    */
   public async createSellOrder({
-    sellerFees = 500,
     asset,
     accountAddress,
     startAmount,
@@ -465,8 +471,9 @@ export class OpenSeaSDK {
     expirationTime,
     paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
+    sellerFees = 500,
+    schemaName = "ERC721",
   }: {
-    sellerFees?: number;
     asset: Asset;
     accountAddress: string;
     startAmount: BigNumberInput;
@@ -478,9 +485,10 @@ export class OpenSeaSDK {
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
     buyerAddress?: string;
+    sellerFees?: number;
+    schemaName?: string;
   }): Promise<OrderV2> {
     const order = await this.generateSellOrder({
-      sellerFees,
       asset,
       accountAddress,
       startAmount,
@@ -492,6 +500,8 @@ export class OpenSeaSDK {
       expirationTime,
       paymentTokenAddress,
       buyerAddress,
+      sellerFees,
+      schemaName,
     });
 
     return this.api.postOrder(order, {
@@ -630,6 +640,7 @@ export class OpenSeaSDK {
     expirationTime: BigNumber,
     startAmount: BigNumber,
     endAmount?: BigNumber,
+    tokenData?: object,
     waitingForBestCounterOrder = false,
     englishAuctionReservePrice?: BigNumber
   ) {
@@ -638,36 +649,14 @@ export class OpenSeaSDK {
     const paymentToken = tokenAddress.toLowerCase();
     const isEther = tokenAddress == NULL_ADDRESS;
     let token;
-    if (this.chain === Chain.Ethereum) {
-      token = this._tokensCache[paymentToken];
-      if (!token) {
-        const { tokens } = await this.api.getPaymentTokens({
-          address: paymentToken,
-        });
-        token = tokens[0];
-        this._tokensCache[paymentToken] = token;
-      }
+    if (isEther) {
+      token = tokenFromJSON({
+        address: NULL_ADDRESS,
+        decimals: 18,
+        symbol: "ETH",
+      });
     } else {
-      switch (tokenAddress) {
-        case "0x2791bca1f2de4661ed88a30c99a7a9449aa84174":
-          token = tokenFromJSON({
-            name: "USD Coin (PoS)",
-            symbol: "USDC",
-            decimals: 6,
-            address: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
-          });
-          break;
-        case "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619":
-          token = tokenFromJSON({
-            name: "Wrapped Ether",
-            symbol: "WETH",
-            decimals: 18,
-            address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
-          });
-          break;
-        default:
-          throw new Error("Unsupported token");
-      }
+      token = tokenFromJSON(tokenData);
     }
     // Validation
     if (startAmount.isNaN() || startAmount.lt(0)) {
