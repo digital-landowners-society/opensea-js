@@ -192,7 +192,7 @@ export class OpenSeaSDK {
    * @param options.domain An optional domain to be hashed and included in the first four bytes of the random salt.
    * @param options.salt Arbitrary salt. If not passed in, a random salt will be generated with the first four bytes being the domain hash or empty.
    * @param options.expirationTime Expiration time for the order, in seconds
-   * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
+   * @param options.paymentTokenData Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
    */
   public async createBuyOrder({
     asset,
@@ -202,7 +202,7 @@ export class OpenSeaSDK {
     domain = "",
     salt = "",
     expirationTime,
-    paymentTokenAddress,
+    paymentTokenData,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -211,7 +211,7 @@ export class OpenSeaSDK {
     domain?: string;
     salt?: string;
     expirationTime?: BigNumberInput;
-    paymentTokenAddress?: string;
+    paymentTokenData?: object;
   }): Promise<OrderV2> {
     const order = await this.generateBuyOrder({
       asset,
@@ -221,7 +221,7 @@ export class OpenSeaSDK {
       domain,
       salt,
       expirationTime,
-      paymentTokenAddress,
+      paymentTokenData,
     });
 
     return this.api.postOrder(order, {
@@ -241,7 +241,7 @@ export class OpenSeaSDK {
    * @param options.domain An optional domain to be hashed and included in the first four bytes of the random salt.
    * @param options.salt Arbitrary salt. If not passed in, a random salt will be generated with the first four bytes being the domain hash or empty.
    * @param options.expirationTime Expiration time for the order, in seconds
-   * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
+   * @param options.paymentTokenData Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
    */
   public async generateBuyOrder({
     asset,
@@ -251,7 +251,6 @@ export class OpenSeaSDK {
     domain = "",
     salt = "",
     expirationTime,
-    paymentTokenAddress,
     paymentTokenData,
   }: {
     asset: Asset;
@@ -261,14 +260,14 @@ export class OpenSeaSDK {
     domain?: string;
     salt?: string;
     expirationTime?: BigNumberInput;
-    paymentTokenAddress?: string;
-    paymentTokenData?: object;
+    paymentTokenData?: any;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
     }
-    paymentTokenAddress =
-      paymentTokenAddress ?? WETH_ADDRESS_BY_CHAIN[this.chain];
+    const paymentTokenAddress = paymentTokenData
+      ? paymentTokenData.address
+      : WETH_ADDRESS_BY_CHAIN[this.chain];
 
     let openseaAsset = this._assetCache[asset.tokenAddress];
     if (openseaAsset) {
@@ -285,7 +284,6 @@ export class OpenSeaSDK {
 
     const { basePrice } = await this._getPriceParameters(
       OrderSide.Buy,
-      paymentTokenAddress,
       makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
       makeBigNumber(startAmount),
       makeBigNumber(startAmount),
@@ -351,7 +349,6 @@ export class OpenSeaSDK {
     salt = "",
     listingTime,
     expirationTime,
-    paymentTokenAddress = NULL_ADDRESS,
     buyerAddress,
     sellerFees = 500,
     schemaName = "ERC721",
@@ -366,11 +363,10 @@ export class OpenSeaSDK {
     salt?: string;
     listingTime?: string;
     expirationTime?: BigNumberInput;
-    paymentTokenAddress?: string;
     buyerAddress?: string;
     sellerFees?: number;
     schemaName?: string;
-    paymentTokenData?: object;
+    paymentTokenData?: any;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
@@ -396,9 +392,12 @@ export class OpenSeaSDK {
       [makeBigNumber(quantity)]
     );
 
-    const { basePrice, endPrice } = await this._getPriceParameters(
+    const {
+      basePrice,
+      endPrice,
+      address: paymentTokenAddress,
+    } = await this._getPriceParameters(
       OrderSide.Sell,
-      paymentTokenAddress,
       makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
       makeBigNumber(startAmount),
       endAmount !== undefined ? makeBigNumber(endAmount) : undefined,
@@ -469,7 +468,7 @@ export class OpenSeaSDK {
     salt = "",
     listingTime,
     expirationTime,
-    paymentTokenAddress = NULL_ADDRESS,
+    paymentTokenData,
     buyerAddress,
     sellerFees = 500,
     schemaName = "ERC721",
@@ -483,7 +482,7 @@ export class OpenSeaSDK {
     salt?: string;
     listingTime?: string;
     expirationTime?: BigNumberInput;
-    paymentTokenAddress?: string;
+    paymentTokenData?: any;
     buyerAddress?: string;
     sellerFees?: number;
     schemaName?: string;
@@ -498,7 +497,7 @@ export class OpenSeaSDK {
       salt,
       listingTime,
       expirationTime,
-      paymentTokenAddress,
+      paymentTokenData,
       buyerAddress,
       sellerFees,
       schemaName,
@@ -636,7 +635,6 @@ export class OpenSeaSDK {
    */
   private async _getPriceParameters(
     orderSide: OrderSide,
-    tokenAddress: string,
     expirationTime: BigNumber,
     startAmount: BigNumber,
     endAmount?: BigNumber,
@@ -646,25 +644,20 @@ export class OpenSeaSDK {
   ) {
     const priceDiff =
       endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
-    const paymentToken = tokenAddress.toLowerCase();
-    const isEther = tokenAddress == NULL_ADDRESS;
-    let token;
-    if (isEther) {
-      token = tokenFromJSON({
-        address: NULL_ADDRESS,
-        decimals: 18,
-        symbol: "ETH",
-      });
-    } else {
-      token = tokenFromJSON(tokenData);
-    }
+    const isEther = !tokenData;
+    const token: OpenSeaFungibleToken = tokenData
+      ? tokenFromJSON(tokenData)
+      : tokenFromJSON({
+          address: NULL_ADDRESS,
+          decimals: 18,
+          symbol: "ETH",
+        });
+    const address = token.address;
     // Validation
     if (startAmount.isNaN() || startAmount.lt(0)) {
       throw new Error(`Starting price must be a number >= 0`);
     }
-    if (!isEther && !token) {
-      throw new Error(`No ERC-20 token found for '${paymentToken}'`);
-    }
+
     if (isEther && waitingForBestCounterOrder) {
       throw new Error(
         `English auctions must use wrapped ETH or an ERC-20 token.`
@@ -733,7 +726,7 @@ export class OpenSeaSDK {
           )
       : undefined;
 
-    return { basePrice, extra, paymentToken, reservePrice, endPrice };
+    return { basePrice, extra, address, reservePrice, endPrice };
   }
 
   private _getSchemaName(asset: Asset | OpenSeaAsset) {
