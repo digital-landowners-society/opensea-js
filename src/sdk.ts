@@ -382,7 +382,7 @@ export class OpenSeaSDK {
           seller_fees: {
             [accountAddress]: sellerFees,
           },
-          opensea_fees: { OPENSEA_FEE_RECIPIENT: 250 },
+          opensea_fees: { [OPENSEA_FEE_RECIPIENT]: 250 },
         },
       },
     };
