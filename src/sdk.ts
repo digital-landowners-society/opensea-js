@@ -57,8 +57,6 @@ export class OpenSeaSDK {
   public readonly api: OpenSeaAPI;
 
   private readonly chain: Chain;
-  private _tokensCache: { [address: string]: OpenSeaFungibleToken } = {};
-  private _assetCache: { [tokenAddress: string]: OpenSeaAsset } = {};
 
   /**
    * Your very own seaport.
@@ -203,6 +201,9 @@ export class OpenSeaSDK {
     salt = "",
     expirationTime,
     paymentTokenData,
+    sellerFees = 500,
+    schemaName = "ERC721",
+    sellerFeeAddress,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -212,6 +213,9 @@ export class OpenSeaSDK {
     salt?: string;
     expirationTime?: BigNumberInput;
     paymentTokenData?: object;
+    sellerFees?: number;
+    schemaName?: string;
+    sellerFeeAddress: string;
   }): Promise<OrderV2> {
     const order = await this.generateBuyOrder({
       asset,
@@ -222,6 +226,9 @@ export class OpenSeaSDK {
       salt,
       expirationTime,
       paymentTokenData,
+      sellerFees,
+      schemaName,
+      sellerFeeAddress,
     });
 
     return this.api.postOrder(order, {
@@ -252,6 +259,9 @@ export class OpenSeaSDK {
     salt = "",
     expirationTime,
     paymentTokenData,
+    sellerFees = 500,
+    schemaName = "ERC721",
+    sellerFeeAddress,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -261,6 +271,9 @@ export class OpenSeaSDK {
     salt?: string;
     expirationTime?: BigNumberInput;
     paymentTokenData?: any;
+    sellerFees?: number;
+    schemaName?: string;
+    sellerFeeAddress: string;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
@@ -269,13 +282,22 @@ export class OpenSeaSDK {
       ? paymentTokenData.address
       : WETH_ADDRESS_BY_CHAIN[this.chain];
 
-    let openseaAsset = this._assetCache[asset.tokenAddress];
-    if (openseaAsset) {
-      openseaAsset.tokenId = asset.tokenId;
-    } else {
-      openseaAsset = await this.api.getAsset(asset);
-      this._assetCache[asset.tokenAddress] = openseaAsset;
-    }
+    const assetData = {
+      token_id: asset.tokenId,
+      asset_contract: {
+        address: asset.tokenAddress,
+        schema_name: schemaName,
+      },
+      collection: {
+        fees: {
+          seller_fees: {
+            [sellerFeeAddress]: sellerFees,
+          },
+          opensea_fees: { [OPENSEA_FEE_RECIPIENT]: 250 },
+        },
+      },
+    };
+    const openseaAsset = assetFromJSON(assetData);
 
     const considerationAssetItems = this.getAssetItems(
       [openseaAsset],
