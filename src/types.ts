@@ -285,6 +285,17 @@ export interface OpenSeaUser {
   username?: string;
 }
 
+export interface TokenData {
+  address: string;
+  decimals: number;
+}
+
+export interface ContractData {
+  sellerFees?: number;
+  schemaName: string;
+  sellerFeeAddress: string;
+}
+
 /**
  * Simple, unannotated asset spec
  */

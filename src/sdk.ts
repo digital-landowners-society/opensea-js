@@ -25,6 +25,7 @@ import { OrderV2 } from "./orders/types";
 import {
   Asset,
   Chain,
+  ContractData,
   Fees,
   Network,
   OpenSeaAPIConfig,
@@ -32,6 +33,7 @@ import {
   OpenSeaFungibleToken,
   OrderSide,
   SchemaName,
+  TokenData,
 } from "./types";
 import {
   confirmTransaction,
@@ -180,6 +182,31 @@ export class OpenSeaSDK {
     }));
   }
 
+  private createOpenseaAsset(
+    asset: Asset,
+    assetContractData?: ContractData
+  ): OpenSeaAsset {
+    const assetData = {
+      token_id: asset.tokenId,
+      asset_contract: {
+        address: asset.tokenAddress,
+        schema_name: assetContractData?.schemaName || "ERC721",
+      },
+      collection: {
+        fees: {
+          seller_fees: {},
+          opensea_fees: { [OPENSEA_FEE_RECIPIENT]: 250 },
+        },
+      },
+    };
+    if (assetContractData && assetContractData.sellerFeeAddress) {
+      const sellerFeeAddress = assetContractData.sellerFeeAddress;
+      const sellerFee = assetContractData.sellerFees || 500;
+      assetData.collection.fees.seller_fees = { [sellerFeeAddress]: sellerFee };
+    }
+    return assetFromJSON(assetData);
+  }
+
   /**
    * Create a buy order to make an offer on an asset.
    * @param options Options for creating the buy order
@@ -201,9 +228,7 @@ export class OpenSeaSDK {
     salt = "",
     expirationTime,
     paymentTokenData,
-    sellerFees = 500,
-    schemaName = "ERC721",
-    sellerFeeAddress,
+    assetContractData,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -212,10 +237,8 @@ export class OpenSeaSDK {
     domain?: string;
     salt?: string;
     expirationTime?: BigNumberInput;
-    paymentTokenData?: object;
-    sellerFees?: number;
-    schemaName?: string;
-    sellerFeeAddress: string;
+    paymentTokenData?: TokenData;
+    assetContractData?: ContractData;
   }): Promise<OrderV2> {
     const order = await this.generateBuyOrder({
       asset,
@@ -226,9 +249,7 @@ export class OpenSeaSDK {
       salt,
       expirationTime,
       paymentTokenData,
-      sellerFees,
-      schemaName,
-      sellerFeeAddress,
+      assetContractData,
     });
 
     return this.api.postOrder(order, {
@@ -259,9 +280,7 @@ export class OpenSeaSDK {
     salt = "",
     expirationTime,
     paymentTokenData,
-    sellerFees = 500,
-    schemaName = "ERC721",
-    sellerFeeAddress,
+    assetContractData,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -270,10 +289,8 @@ export class OpenSeaSDK {
     domain?: string;
     salt?: string;
     expirationTime?: BigNumberInput;
-    paymentTokenData?: any;
-    sellerFees?: number;
-    schemaName?: string;
-    sellerFeeAddress: string;
+    paymentTokenData?: TokenData;
+    assetContractData?: ContractData;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
@@ -282,22 +299,7 @@ export class OpenSeaSDK {
       ? paymentTokenData.address
       : WETH_ADDRESS_BY_CHAIN[this.chain];
 
-    const assetData = {
-      token_id: asset.tokenId,
-      asset_contract: {
-        address: asset.tokenAddress,
-        schema_name: schemaName,
-      },
-      collection: {
-        fees: {
-          seller_fees: {
-            [sellerFeeAddress]: sellerFees,
-          },
-          opensea_fees: { [OPENSEA_FEE_RECIPIENT]: 250 },
-        },
-      },
-    };
-    const openseaAsset = assetFromJSON(assetData);
+    const openseaAsset = this.createOpenseaAsset(asset, assetContractData);
 
     const considerationAssetItems = this.getAssetItems(
       [openseaAsset],
@@ -372,10 +374,8 @@ export class OpenSeaSDK {
     listingTime,
     expirationTime,
     buyerAddress,
-    sellerFees = 500,
-    schemaName = "ERC721",
     paymentTokenData,
-    sellerFeeAddress,
+    assetContractData,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -387,30 +387,14 @@ export class OpenSeaSDK {
     listingTime?: string;
     expirationTime?: BigNumberInput;
     buyerAddress?: string;
-    sellerFees?: number;
-    schemaName?: string;
-    paymentTokenData?: any;
-    sellerFeeAddress: string;
+    paymentTokenData?: TokenData;
+    assetContractData?: ContractData;
   }): Promise<OrderWithCounter> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
     }
-    const assetData = {
-      token_id: asset.tokenId,
-      asset_contract: {
-        address: asset.tokenAddress,
-        schema_name: schemaName,
-      },
-      collection: {
-        fees: {
-          seller_fees: {
-            [sellerFeeAddress]: sellerFees,
-          },
-          opensea_fees: { [OPENSEA_FEE_RECIPIENT]: 250 },
-        },
-      },
-    };
-    const openseaAsset = assetFromJSON(assetData);
+    const openseaAsset = this.createOpenseaAsset(asset, assetContractData);
+
     const offerAssetItems = this.getAssetItems(
       [openseaAsset],
       [makeBigNumber(quantity)]
@@ -492,11 +476,9 @@ export class OpenSeaSDK {
     salt = "",
     listingTime,
     expirationTime,
-    paymentTokenData,
     buyerAddress,
-    sellerFees = 500,
-    schemaName = "ERC721",
-    sellerFeeAddress,
+    paymentTokenData,
+    assetContractData,
   }: {
     asset: Asset;
     accountAddress: string;
@@ -507,11 +489,9 @@ export class OpenSeaSDK {
     salt?: string;
     listingTime?: string;
     expirationTime?: BigNumberInput;
-    paymentTokenData?: any;
     buyerAddress?: string;
-    sellerFees?: number;
-    schemaName?: string;
-    sellerFeeAddress: string;
+    paymentTokenData?: TokenData;
+    assetContractData?: ContractData;
   }): Promise<OrderV2> {
     const order = await this.generateSellOrder({
       asset,
@@ -525,9 +505,7 @@ export class OpenSeaSDK {
       expirationTime,
       paymentTokenData,
       buyerAddress,
-      sellerFees,
-      schemaName,
-      sellerFeeAddress,
+      assetContractData,
     });
 
     return this.api.postOrder(order, {
@@ -651,7 +629,7 @@ export class OpenSeaSDK {
   /**
    * Compute the `basePrice` and `extra` parameters to be used to price an order.
    * Also validates the expiration time and auction type.
-   * @param tokenAddress Address of the ERC-20 token to use for trading.
+   * @param tokenData Address of the ERC-20 token to use for trading.
    * Use the null address for ETH
    * @param expirationTime When the auction expires, or 0 if never.
    * @param orderSide Side of the order, either buy or sell
@@ -665,7 +643,7 @@ export class OpenSeaSDK {
     expirationTime: BigNumber,
     startAmount: BigNumber,
     endAmount?: BigNumber,
-    tokenData?: object,
+    tokenData?: TokenData,
     waitingForBestCounterOrder = false,
     englishAuctionReservePrice?: BigNumber
   ) {
