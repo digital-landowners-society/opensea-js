@@ -199,10 +199,10 @@ export class OpenSeaSDK {
         },
       },
     };
-    if (assetContractData && assetContractData.sellerFeeAddress) {
-      const sellerFeeAddress = assetContractData.sellerFeeAddress;
-      const sellerFee = assetContractData.sellerFees || 500;
-      assetData.collection.fees.seller_fees = { [sellerFeeAddress]: sellerFee };
+    if (assetContractData?.sellerFeeAddress && assetContractData?.sellerFees) {
+      assetData.collection.fees.seller_fees = {
+        [assetContractData.sellerFeeAddress]: assetContractData.sellerFees,
+      };
     }
     return assetFromJSON(assetData);
   }
